@@ -1,0 +1,14 @@
+services:
+  
+  db:
+    image: postgres:12.13-alpine
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_USER=devel
+    ports:
+      - 5432:5432
+  
+  adminer:
+    image: adminer:latest
+    ports:
+      - 8080:8080
