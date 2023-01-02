@@ -1,7 +1,4 @@
-use crate::{
-    db::establish_connection,
-    models::user::{User, UserRegister},
-};
+use crate::{db::establish_connection, models::user::UserRegister};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
