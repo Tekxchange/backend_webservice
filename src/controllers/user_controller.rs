@@ -20,6 +20,24 @@ async fn register(
     Ok(created_response)
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct UsernameExistsDto {
+    username: String,
+}
+
+#[post("/username_exists", format = "json", data = "<username>")]
+async fn username_exists(
+    mut user_service: UserService,
+    username: Json<UsernameExistsDto>,
+) -> Result<Json<bool>, BadRequest<()>> {
+    let found = user_service
+        .username_exists(&username.0.username)
+        .await
+        .map_err(|_| BadRequest(None))?;
+
+    Ok(Json(found))
+}
+
 pub fn routes() -> Vec<Route> {
-    return routes![register];
+    return routes![register, username_exists];
 }
