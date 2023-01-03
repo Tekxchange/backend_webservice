@@ -3,13 +3,17 @@ use crate::{
     models::user::{UserLogin, UserRegister},
 };
 use argon2::{self, Config};
+use chrono::offset::Utc;
 use entity::user::{Entity as UserEntity, Model as UserModel};
+use hmac::{Hmac, Mac};
+use jwt::{AlgorithmType, Header as JwtHeader};
 use migration::Condition;
 use rand::{distributions::Alphanumeric, Rng};
 use rocket::request::{self, FromRequest};
 use rocket::Request;
 use sea_orm::DatabaseConnection;
 use sea_orm::{prelude::*, ActiveValue};
+use sha2::Sha512;
 use std::{collections::BTreeMap, env};
 use thiserror::Error;
 
@@ -21,8 +25,10 @@ pub enum UserServiceError {
     DbError(crate::db::DbError),
     #[error(transparent)]
     OrmError(sea_orm::DbErr),
-    #[error("User with that email or username does not exist")]
+    #[error("User with that email, username, or id does not exist")]
     UserNotFound,
+    #[error("Invalid JWT was provided")]
+    InvalidToken,
     #[error("Incorrect password provided")]
     InvalidPassword,
     #[error("An unknown error occurred")]
@@ -31,7 +37,8 @@ pub enum UserServiceError {
 
 pub struct UserService {
     db_connection: DatabaseConnection,
-    secret: String,
+    jwt_key: Hmac<Sha512>,
+    signing_alg: AlgorithmType,
 }
 
 #[rocket::async_trait]
@@ -40,13 +47,21 @@ impl<'r> FromRequest<'r> for UserService {
 
     async fn from_request(_: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
         let secret = env::var("SECRET").unwrap();
+
+        let key = Hmac::new_from_slice(secret.as_bytes()).map_err(|_| UserServiceError::Unknown);
+        if let Err(e) = key {
+            return request::Outcome::Failure((rocket::http::Status::InternalServerError, e));
+        }
+        let key: Hmac<Sha512> = key.unwrap();
+
         match establish_connection()
             .await
             .map_err(|e| UserServiceError::DbError(e))
         {
             Ok(conn) => request::Outcome::Success(Self {
                 db_connection: conn,
-                secret,
+                jwt_key: key,
+                signing_alg: AlgorithmType::Hs512,
             }),
             Err(e) => request::Outcome::Failure((rocket::http::Status::InternalServerError, e)),
         }
@@ -83,7 +98,7 @@ impl UserService {
 
         register.password =
             argon2::hash_encoded(register.password.as_bytes(), salt.as_bytes(), &config)
-                .map_err(|e| UserServiceError::Unknown)?;
+                .map_err(|_| UserServiceError::Unknown)?;
 
         let user_active_model = user::ActiveModel {
             email: ActiveValue::Set(register.email.to_owned()),
@@ -97,6 +112,28 @@ impl UserService {
             .await
             .map_err(|e| UserServiceError::OrmError(e))?;
         Ok(())
+    }
+
+    pub async fn validate_token(&mut self, token: &str) -> Result<UserModel, UserServiceError> {
+        use jwt::VerifyWithKey;
+
+        let claims: BTreeMap<String, String> = token
+            .verify_with_key(&self.jwt_key)
+            .map_err(|_| UserServiceError::InvalidToken)?;
+
+        let user_id = claims.get("sub");
+        if let None = user_id {
+            return Err(UserServiceError::InvalidToken);
+        }
+        let user_id = user_id
+            .unwrap()
+            .parse::<i64>()
+            .map_err(|_| UserServiceError::Unknown)?;
+
+        Ok(self
+            .get_user_by_id(&user_id)
+            .await?
+            .ok_or_else(|| UserServiceError::InvalidToken)?)
     }
 
     async fn get_by_email(&mut self, email: &str) -> Result<Option<UserModel>, UserServiceError> {
@@ -124,6 +161,41 @@ impl UserService {
         Ok(found)
     }
 
+    pub async fn get_user_by_id(
+        &mut self,
+        id: &i64,
+    ) -> Result<Option<UserModel>, UserServiceError> {
+        Ok(UserEntity::find_by_id(*id)
+            .one(&self.db_connection)
+            .await
+            .map_err(|e| UserServiceError::OrmError(e))?)
+    }
+
+    fn generate_jwt(&mut self, user: &UserModel) -> Result<String, UserServiceError> {
+        use jwt::{SignWithKey, Token};
+
+        let user_id = user.id.to_string();
+        let now = Utc::now().timestamp().to_string();
+
+        let mut claims: BTreeMap<&str, &str> = BTreeMap::new();
+        claims.insert("sub", &user_id);
+        claims.insert("iat", &now);
+
+        let jwt_headers = JwtHeader {
+            algorithm: self.signing_alg,
+            ..Default::default()
+        };
+
+        let token = Token::new(jwt_headers, claims)
+            .sign_with_key(&self.jwt_key)
+            .map_err(|e| {
+                println!("{e:?}");
+                UserServiceError::Unknown
+            })?;
+
+        Ok(token.as_str().to_owned())
+    }
+
     pub async fn username_exists(&mut self, username: &str) -> Result<bool, UserServiceError> {
         use entity::user;
 
@@ -149,9 +221,6 @@ impl UserService {
     }
 
     pub async fn login(&mut self, login: UserLogin) -> Result<String, UserServiceError> {
-        use hmac::{Hmac, Mac};
-        use jwt::{Header, SignWithKey, Token};
-        use sha2::Sha256;
         let mut user: Option<UserModel> = None;
 
         if let Some(ref email) = login.email {
@@ -166,34 +235,16 @@ impl UserService {
 
         let user: UserModel = user.unwrap();
 
-        let password_hash: PasswordHash =
-            PasswordHash::new(&user.password).map_err(|_| UserServiceError::InvalidPassword)?;
-
-        println!("{:?}", &password_hash);
-
-        match Argon2::default().verify_password(&user.password.as_bytes(), &password_hash) {
-            Ok(_) => {
-                let key: Hmac<Sha256> = Hmac::new_from_slice(self.secret.as_bytes())
-                    .map_err(|_| UserServiceError::Unknown)?;
-
-                let header = Header {
-                    ..Default::default()
-                };
-
-                let user_id_str = user.id.to_string();
-
-                let mut claims: BTreeMap<&str, &str> = BTreeMap::new();
-                claims.insert("sub", &user_id_str);
-
-                let token = Token::new(header, claims)
-                    .sign_with_key(&key)
-                    .map_err(|_| UserServiceError::Unknown)?;
-
-                Ok(token.as_str().to_owned())
+        match argon2::verify_encoded(&user.password, login.password.as_bytes()) {
+            Ok(success) => {
+                if !success {
+                    return Err(UserServiceError::InvalidPassword);
+                }
+                return Ok(self.generate_jwt(&user)?);
             }
             Err(e) => {
-                println!("{:?}", e);
-                return Err(UserServiceError::InvalidPassword);
+                println!("{e:?}");
+                todo!();
             }
         }
     }

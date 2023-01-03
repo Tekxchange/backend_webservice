@@ -3,7 +3,7 @@ use crate::{
     services::UserService,
 };
 use rocket::{
-    http::{Cookie, CookieJar},
+    http::{Cookie, CookieJar, SameSite},
     response::status::{BadRequest, Created, Unauthorized},
     serde::json::Json,
     Route,
@@ -71,10 +71,7 @@ async fn login(
         return Unauthorized(None);
     })?;
 
-    let token_cookie = Cookie::build("token", token)
-        .secure(true)
-        .http_only(true)
-        .finish();
+    let token_cookie = Cookie::build("token", token).same_site(SameSite::Lax).finish();
 
     cookies.add(token_cookie);
 

@@ -2,7 +2,6 @@ use sea_orm_migration::{
     prelude::*,
     sea_orm::{ConnectionTrait, Statement},
 };
-use sea_query::table::ColumnDef;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
