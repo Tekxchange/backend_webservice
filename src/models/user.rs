@@ -31,6 +31,13 @@ pub struct UserLogin {
     pub password: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserReturnDto {
+    pub id: i64,
+    pub username: String,
+    pub email: String,
+}
+
 ///
 /// Request guard that will read the JWT from cookies and inject the user into the function
 pub struct AuthUser {

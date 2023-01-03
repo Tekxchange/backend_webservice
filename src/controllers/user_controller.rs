@@ -1,5 +1,5 @@
 use crate::{
-    models::user::{UserLogin, UserRegister},
+    models::user::{AuthUser, UserLogin, UserRegister, UserReturnDto},
     services::UserService,
 };
 use rocket::{
@@ -71,13 +71,32 @@ async fn login(
         return Unauthorized(None);
     })?;
 
-    let token_cookie = Cookie::build("token", token).same_site(SameSite::Lax).finish();
+    let token_cookie = Cookie::build("token", token)
+        .same_site(SameSite::Lax)
+        .finish();
 
     cookies.add(token_cookie);
 
     Ok(())
 }
 
+#[get("/user/info")]
+async fn get_user_info(auth_user: AuthUser) -> Json<UserReturnDto> {
+    let to_return = UserReturnDto {
+        id: auth_user.user.id,
+        email: auth_user.user.email,
+        username: auth_user.user.username,
+    };
+
+    Json(to_return)
+}
+
 pub fn routes() -> Vec<Route> {
-    return routes![register, username_exists, email_exists, login];
+    return routes![
+        register,
+        username_exists,
+        email_exists,
+        login,
+        get_user_info
+    ];
 }
