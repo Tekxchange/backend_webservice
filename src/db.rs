@@ -1,4 +1,3 @@
-use dotenvy::dotenv;
 use sea_orm::{Database, DatabaseConnection, DbErr};
 use std::env;
 use thiserror::Error;
@@ -12,8 +11,6 @@ pub enum DbError {
 }
 
 pub async fn establish_connection() -> Result<DatabaseConnection, DbError> {
-    dotenv().ok();
-
     let db_url = env::var("DATABASE_URL").or_else(|_| Err(DbError::EnvironmentError))?;
 
     let res = Database::connect(db_url)

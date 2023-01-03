@@ -17,3 +17,10 @@ pub struct UserRegister {
     pub email: String,
     pub password: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserLogin {
+    pub username: Option<String>,
+    pub email: Option<String>,
+    pub password: String,
+}

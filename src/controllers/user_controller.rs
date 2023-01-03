@@ -1,6 +1,10 @@
-use crate::{models::user::UserRegister, services::UserService};
+use crate::{
+    models::user::{UserLogin, UserRegister},
+    services::UserService,
+};
 use rocket::{
-    response::status::{BadRequest, Created},
+    http::{Cookie, CookieJar},
+    response::status::{BadRequest, Created, Unauthorized},
     serde::json::Json,
     Route,
 };
@@ -56,6 +60,27 @@ async fn email_exists(
     Ok(Json(found))
 }
 
+#[post("/login", format = "json", data = "<login>")]
+async fn login(
+    mut user_service: UserService,
+    login: Json<UserLogin>,
+    cookies: &CookieJar<'_>,
+) -> Result<(), Unauthorized<()>> {
+    let token = user_service.login(login.0).await.map_err(|e| {
+        println!("{:?}", e);
+        return Unauthorized(None);
+    })?;
+
+    let token_cookie = Cookie::build("token", token)
+        .secure(true)
+        .http_only(true)
+        .finish();
+
+    cookies.add(token_cookie);
+
+    Ok(())
+}
+
 pub fn routes() -> Vec<Route> {
-    return routes![register, username_exists, email_exists];
+    return routes![register, username_exists, email_exists, login];
 }
