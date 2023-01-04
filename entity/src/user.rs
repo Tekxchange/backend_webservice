@@ -12,6 +12,7 @@ pub struct Model {
     pub updated_at: DateTime,
     pub username: String,
     pub email: String,
+    pub role: i16,
     pub password: String,
 }
 

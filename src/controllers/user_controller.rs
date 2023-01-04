@@ -80,12 +80,22 @@ async fn login(
     Ok(())
 }
 
+#[get("/logout")]
+async fn logout(cookies: &CookieJar<'_>) {
+    let token_cookie = cookies.get_pending("token");
+
+    if let Some(cookie) = token_cookie {
+        cookies.remove(cookie);
+    }
+}
+
 #[get("/user/info")]
 async fn get_user_info(auth_user: AuthUser) -> Json<UserReturnDto> {
     let to_return = UserReturnDto {
         id: auth_user.user.id,
         email: auth_user.user.email,
         username: auth_user.user.username,
+        role: auth_user.user.role,
     };
 
     Json(to_return)
@@ -97,6 +107,7 @@ pub fn routes() -> Vec<Route> {
         username_exists,
         email_exists,
         login,
+        logout,
         get_user_info
     ];
 }

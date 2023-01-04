@@ -1,6 +1,9 @@
 use crate::{
     db::establish_connection,
-    models::user::{UserLogin, UserRegister},
+    models::{
+        role::Role,
+        user::{UserLogin, UserRegister},
+    },
 };
 use argon2::{self, Config};
 use chrono::offset::Utc;
@@ -11,8 +14,8 @@ use migration::Condition;
 use rand::{distributions::Alphanumeric, Rng};
 use rocket::request::{self, FromRequest};
 use rocket::Request;
-use sea_orm::DatabaseConnection;
 use sea_orm::{prelude::*, ActiveValue};
+use sea_orm::{DatabaseConnection, Set};
 use sha2::Sha512;
 use std::{collections::BTreeMap, env};
 use thiserror::Error;
@@ -69,10 +72,21 @@ impl<'r> FromRequest<'r> for UserService {
 }
 
 impl UserService {
+    pub fn new(db_connection: DatabaseConnection) -> Self {
+        let secret = env::var("SECRET").unwrap();
+
+        let key = Hmac::new_from_slice(secret.as_bytes()).unwrap();
+        Self {
+            db_connection,
+            jwt_key: key,
+            signing_alg: AlgorithmType::Hs512,
+        }
+    }
+
     pub async fn create_user(
         &mut self,
         mut register: UserRegister,
-    ) -> Result<(), UserServiceError> {
+    ) -> Result<i64, UserServiceError> {
         use entity::user;
 
         let found_users = UserEntity::find()
@@ -107,11 +121,11 @@ impl UserService {
             ..Default::default()
         };
 
-        user_active_model
+        let created_user = user_active_model
             .insert(&self.db_connection)
             .await
             .map_err(|e| UserServiceError::OrmError(e))?;
-        Ok(())
+        Ok(created_user.id)
     }
 
     pub async fn validate_token(&mut self, token: &str) -> Result<UserModel, UserServiceError> {
@@ -175,10 +189,12 @@ impl UserService {
         use jwt::{SignWithKey, Token};
 
         let user_id = user.id.to_string();
+        let role_id = user.role.to_string();
         let now = Utc::now().timestamp().to_string();
 
         let mut claims: BTreeMap<&str, &str> = BTreeMap::new();
         claims.insert("sub", &user_id);
+        claims.insert("role", &role_id);
         claims.insert("iat", &now);
 
         let jwt_headers = JwtHeader {
@@ -247,5 +263,24 @@ impl UserService {
                 todo!();
             }
         }
+    }
+
+    pub async fn update_role_for_user(
+        &mut self,
+        user_id: i64,
+        new_role: Role,
+    ) -> Result<(), UserServiceError> {
+        let mut user: entity::user::ActiveModel = self
+            .get_user_by_id(&user_id)
+            .await?
+            .ok_or(UserServiceError::UserNotFound)?
+            .into();
+
+        user.role = Set(new_role as i16);
+        user.update(&self.db_connection)
+            .await
+            .map_err(|e| UserServiceError::OrmError(e))?;
+
+        Ok(())
     }
 }

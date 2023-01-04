@@ -17,6 +17,7 @@ impl MigrationTrait for Migration {
             "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "username" VARCHAR(32) NOT NULL,
             "email" VARCHAR(512) NOT NULL,
+            "role" SMALLINT NOT NULL DEFAULT (1 << 0),
             "password" VARCHAR(512) NOT NULL
         );"#,
             r#"CREATE UNIQUE INDEX idx_user_username ON "user" (username);"#,
