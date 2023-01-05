@@ -1,3 +1,4 @@
+use rocket::{response::Responder, Response, http::Status};
 use sea_orm::{Database, DatabaseConnection, DbErr};
 use std::env;
 use thiserror::Error;
@@ -8,6 +9,14 @@ pub enum DbError {
     ConnectionError(DbErr),
     #[error("Environment variables are not set correctly")]
     EnvironmentError,
+}
+
+impl<'r> Responder<'r, 'static> for DbError {
+    fn respond_to(self, _: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        Response::build()
+        .status(Status::InternalServerError)
+        .ok()
+    }
 }
 
 pub async fn establish_connection() -> Result<DatabaseConnection, DbError> {

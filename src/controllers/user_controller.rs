@@ -1,10 +1,10 @@
 use crate::{
     models::user::{AuthUser, UserLogin, UserRegister, UserReturnDto},
-    services::UserService,
+    services::{UserService, UserServiceError},
 };
 use rocket::{
     http::{Cookie, CookieJar, SameSite},
-    response::status::{BadRequest, Created, Unauthorized},
+    response::status::Created,
     serde::json::Json,
     Route,
 };
@@ -13,11 +13,10 @@ use rocket::{
 async fn register(
     mut user_service: UserService,
     user_register: Json<UserRegister>,
-) -> Result<Created<()>, BadRequest<()>> {
+) -> Result<Created<()>, UserServiceError> {
     user_service
         .create_user(user_register.0)
-        .await
-        .map_err(|_| BadRequest(None))?;
+        .await?;
 
     let created_response = Created::new("");
 
@@ -33,11 +32,10 @@ struct UsernameExistsDto {
 async fn username_exists(
     mut user_service: UserService,
     username: Json<UsernameExistsDto>,
-) -> Result<Json<bool>, BadRequest<()>> {
+) -> Result<Json<bool>, UserServiceError> {
     let found = user_service
         .username_exists(&username.0.username)
-        .await
-        .map_err(|_| BadRequest(None))?;
+        .await?;
 
     Ok(Json(found))
 }
@@ -51,11 +49,10 @@ struct EmailExistsDto {
 async fn email_exists(
     mut user_service: UserService,
     email: Json<EmailExistsDto>,
-) -> Result<Json<bool>, BadRequest<()>> {
+) -> Result<Json<bool>, UserServiceError> {
     let found = user_service
         .email_exists(&email.0.email)
-        .await
-        .map_err(|_| BadRequest(None))?;
+        .await?;
 
     Ok(Json(found))
 }
@@ -65,11 +62,8 @@ async fn login(
     mut user_service: UserService,
     login: Json<UserLogin>,
     cookies: &CookieJar<'_>,
-) -> Result<(), Unauthorized<()>> {
-    let token = user_service.login(login.0).await.map_err(|e| {
-        println!("{:?}", e);
-        return Unauthorized(None);
-    })?;
+) -> Result<(), UserServiceError> {
+    let token = user_service.login(login.0).await?;
 
     let token_cookie = Cookie::build("token", token)
         .same_site(SameSite::Lax)
