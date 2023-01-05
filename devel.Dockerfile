@@ -1,7 +1,11 @@
 FROM rust:latest
 
-WORKDIR /usr/src/app
+USER 1000:1000
 
 RUN cargo install cargo-watch
+
+VOLUME [ "/usr/src/app" ]
+
+WORKDIR /usr/src/app
 
 CMD ["cargo", "watch", "-x", "run"]

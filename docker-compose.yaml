@@ -16,6 +16,7 @@ services:
 
   backend:
     build:
+      context: .
       dockerfile: ./devel.Dockerfile
     ports:
       - "8000:8000"
@@ -24,4 +25,4 @@ services:
     env_file:
       - .env
     volumes:
-      - .:/usr/src/app
+      - ./:/usr/src/app:z
