@@ -2,3 +2,8 @@
 address = "0.0.0.0"
 port = 8000
 
+[default.limits]
+forms = "64 kB"
+json = "1 MiB"
+"file/jpg" = "5 MiB"
+"file/png" = "5 MiB"

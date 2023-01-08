@@ -11,7 +11,7 @@ use std::env;
 use crate::models::user::UserRegister;
 
 #[launch]
-async fn rocket() -> _ {
+pub async fn rocket() -> _ {
     dotenvy::dotenv().ok();
     let conn = db::establish_connection().await.unwrap();
     Migrator::up(&conn, None).await.unwrap();

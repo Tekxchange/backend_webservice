@@ -1,3 +1,4 @@
+use super::m20220101_000001_create_table::User;
 use sea_orm_migration::{
     prelude::*,
     sea_orm::{ConnectionTrait, Statement},
@@ -9,54 +10,45 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let stmt = Statement::from_string(
-            manager.get_database_backend(),
-            String::from(
-                r#"
-        CREATE OR REPLACE FUNCTION update_timestamp()
-        RETURNS TRIGGER AS $$
-        BEGIN
-              NEW.updated_at = now(); 
-              RETURN NEW;
-        END;
-        $$ language 'plpgsql';
-        "#,
-            ),
-        );
-        manager.get_connection().execute(stmt).await?;
-
+        // Replace the sample below with your own migration scripts
         manager
             .create_table(
                 Table::create()
-                    .table(User::Table)
+                    .table(Product::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(User::Id)
+                        ColumnDef::new(Product::Id)
                             .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
+                    .col(ColumnDef::new(Product::ProductTitle).string().not_null())
+                    .col(ColumnDef::new(Product::Description).string().not_null())
+                    .col(ColumnDef::new(Product::Price).decimal().not_null())
                     .col(
-                        ColumnDef::new(User::Username)
-                            .string()
+                        ColumnDef::new(Product::CreatedBy)
+                            .big_integer()
                             .unique_key()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(User::Email).string().unique_key().not_null())
-                    .col(ColumnDef::new(User::Password).string().not_null())
-                    .col(ColumnDef::new(User::Role).small_integer().not_null().default(1 << 0))
                     .col(
-                        ColumnDef::new(User::CreatedAt)
+                        ColumnDef::new(Product::CreatedAt)
                             .timestamp()
                             .not_null()
                             .extra(String::from("DEFAULT CURRENT_TIMESTAMP")),
                     )
                     .col(
-                        ColumnDef::new(User::UpdatedAt)
+                        ColumnDef::new(Product::UpdatedAt)
                             .timestamp()
                             .not_null()
                             .extra(String::from("DEFAULT CURRENT_TIMESTAMP")),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-products-created_by")
+                            .from(Product::Table, Product::CreatedBy)
+                            .to(User::Table, User::Id),
                     )
                     .to_owned(),
             )
@@ -66,9 +58,9 @@ impl MigrationTrait for Migration {
             manager.get_database_backend(),
             String::from(
                 r#"
-                CREATE TRIGGER "user_timestamp" BEFORE INSERT OR UPDATE ON "user"
-                FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-            "#,
+                    CREATE TRIGGER "product_timestamp" BEFORE INSERT OR UPDATE ON "product"
+                    FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
+                "#,
             ),
         );
         manager.get_connection().execute(stmt).await?;
@@ -76,21 +68,24 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Replace the sample below with your own migration scripts
+
         manager
-            .drop_table(Table::drop().table(User::Table).to_owned())
-            .await?;
-        Ok(())
+            .drop_table(Table::drop().table(Product::Table).to_owned())
+            .await
     }
 }
 
+/// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
-pub enum User {
+#[iden = "product"]
+enum Product {
     Table,
     Id,
-    Username,
-    Email,
-    Role,
-    Password,
+    ProductTitle,
+    Description,
+    Price,
+    CreatedBy,
     CreatedAt,
     UpdatedAt,
 }

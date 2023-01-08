@@ -2,4 +2,6 @@
 
 pub mod prelude;
 
+pub mod picture;
+pub mod product;
 pub mod user;
