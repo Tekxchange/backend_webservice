@@ -2,4 +2,5 @@
 
 pub use super::picture::Entity as Picture;
 pub use super::product::Entity as Product;
+pub use super::product_picture::Entity as ProductPicture;
 pub use super::user::Entity as User;

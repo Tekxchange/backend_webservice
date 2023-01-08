@@ -79,7 +79,7 @@ impl MigrationTrait for Migration {
 /// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
 #[iden = "product"]
-enum Product {
+pub enum Product {
     Table,
     Id,
     ProductTitle,

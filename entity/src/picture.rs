@@ -6,13 +6,22 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "picture")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i32,
+    pub id: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     pub file_location: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::product_picture::Entity")]
+    ProductPicture,
+}
+
+impl Related<super::product_picture::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ProductPicture.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}
