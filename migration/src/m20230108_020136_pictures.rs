@@ -86,7 +86,8 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .from(ProductPicture::Table, ProductPicture::PictureId)
-                            .to(Picture::Table, Picture::Id),
+                            .to(Picture::Table, Picture::Id)
+                            .on_delete(ForeignKeyAction::Restrict),
                     )
                     .foreign_key(
                         ForeignKey::create()
@@ -94,7 +95,8 @@ impl MigrationTrait for Migration {
                             .to(
                                 crate::m20230107_225831_products::Product::Table,
                                 crate::m20230107_225831_products::Product::Id,
-                            ),
+                            )
+                            .on_delete(ForeignKeyAction::Restrict),
                     )
                     .index(
                         Index::create()

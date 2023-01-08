@@ -18,6 +18,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::product_audit::Entity")]
+    ProductAudit,
     #[sea_orm(has_many = "super::product_picture::Entity")]
     ProductPicture,
     #[sea_orm(
@@ -28,6 +30,12 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     User,
+}
+
+impl Related<super::product_audit::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ProductAudit.def()
+    }
 }
 
 impl Related<super::product_picture::Entity> for Entity {
