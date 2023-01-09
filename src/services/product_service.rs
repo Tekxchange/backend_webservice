@@ -6,15 +6,18 @@ use rocket::{
     response::Responder,
     Request, Response,
 };
-use sea_orm::prelude::*;
-use sea_orm::query::Condition;
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
+use sea_orm::{
+    entity::prelude::*, query::Condition, ActiveModelTrait, ActiveValue, DatabaseConnection,
+};
 use serde_json::json;
 use thiserror::Error;
 
 use crate::{
     db::establish_connection,
-    models::{product::ProductDetails, user::AuthUser},
+    models::{
+        product::{ProductDetails, ProductReturn},
+        user::{AuthUser, MinUserReturnDto},
+    },
 };
 
 #[derive(Error, Debug)]
@@ -101,28 +104,71 @@ impl ProductService {
     pub async fn get_product_by_id(
         &mut self,
         id: i64,
-    ) -> Result<ProductDetails, ProductServiceError> {
+    ) -> Result<ProductReturn, ProductServiceError> {
         use entity::product;
         let found = ProductEntity::find()
-            .filter(Condition::any().add(product::Column::Id.eq(id)))
+            .find_also_related(entity::user::Entity)
+            .filter(Condition::all().add(product::Column::Id.eq(id)))
             .one(&self.db_connection)
             .await
             .map_err(|e| ProductServiceError::OrmError(e))?;
 
-        if let Some(product) = found {
-            return Ok(ProductDetails {
-                description: product.description,
-                title: product.product_title,
-                price: product.price,
-                city: product.location_city,
-                country: product.location_country,
-                state: product.location_state,
-                latitude: product.location_latitude,
-                longitude: product.location_longitude,
-                zip: product.location_zip,
+        if let Some((prod, user)) = found {
+            if let None = user {
+                return Err(ProductServiceError::Unknown);
+            }
+            let user = user.unwrap();
+            return Ok(ProductReturn {
+                title: prod.product_title,
+                description: prod.description,
+                price: f64::try_from(prod.price).map_err(|_| ProductServiceError::Unknown)?,
+                created_by: MinUserReturnDto {
+                    id: user.id,
+                    username: user.username,
+                },
             });
+        } else {
+            return Err(ProductServiceError::NotFound(id));
+        }
+    }
+
+    pub async fn update_product_by_id(
+        &mut self,
+        id: i64,
+        product: ProductDetails,
+        user: AuthUser,
+    ) -> Result<(), ProductServiceError> {
+        let db_product = self.get_product_by_id(id).await?;
+        if db_product.created_by.id != user.user.id {
+            return Err(ProductServiceError::NotAllowed);
         }
 
-        return Err(ProductServiceError::NotFound(id));
+        let active_product: entity::product::ActiveModel = ProductEntity::find()
+            .filter(Condition::all().add(entity::product::Column::Id.eq(id)))
+            .one(&self.db_connection)
+            .await
+            .map_err(|e| ProductServiceError::OrmError(e))?
+            .ok_or(ProductServiceError::NotFound(id))?
+            .into();
+
+        let new_prod = entity::product::ActiveModel {
+            description: ActiveValue::Set(product.description),
+            location_city: ActiveValue::Set(product.city),
+            location_country: ActiveValue::Set(product.country),
+            location_state: ActiveValue::Set(product.state),
+            location_zip: ActiveValue::Set(product.zip),
+            location_latitude: ActiveValue::Set(product.latitude),
+            location_longitude: ActiveValue::Set(product.longitude),
+            price: ActiveValue::Set(product.price),
+            product_title: ActiveValue::Set(product.title),
+            ..active_product
+        };
+
+        new_prod
+            .update(&self.db_connection)
+            .await
+            .map_err(|e| ProductServiceError::OrmError(e))?;
+
+        Ok(())
     }
 }

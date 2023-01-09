@@ -10,10 +10,14 @@ use chrono::offset::Utc;
 use entity::user::{Entity as UserEntity, Model as UserModel};
 use hmac::{Hmac, Mac};
 use jwt::{AlgorithmType, Header as JwtHeader};
-use migration::Condition;
 use rand::{distributions::Alphanumeric, Rng};
-use rocket::{request::{self, FromRequest}, Request, response::Responder, Response, http::Status};
-use sea_orm::{prelude::*, ActiveValue, DatabaseConnection, Set};
+use rocket::{
+    http::Status,
+    request::{self, FromRequest},
+    response::Responder,
+    Request, Response,
+};
+use sea_orm::{prelude::*, query::Condition, ActiveValue, DatabaseConnection, Set};
 use serde_json::json;
 use sha2::Sha512;
 use std::{collections::BTreeMap, env};
@@ -41,16 +45,16 @@ impl<'r> Responder<'r, 'static> for UserServiceError {
     fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
         match self {
             Self::DuplicateUserError | Self::InvalidPassword | Self::InvalidToken => {
-                Response::build_from(json!({"error": format!("{self}")}).respond_to(request)?).status(Status::BadRequest).ok()
-            },
-            Self::UserNotFound => {
-                Response::build_from(json!({"error": format!("{self}")}).respond_to(request)?).status(Status::NotFound).ok()
-            },
-            _ => {
-                Response::build()
-                .status(Status::InternalServerError)
-                .ok()
+                Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
+                    .status(Status::BadRequest)
+                    .ok()
             }
+            Self::UserNotFound => {
+                Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
+                    .status(Status::NotFound)
+                    .ok()
+            }
+            _ => Response::build().status(Status::InternalServerError).ok(),
         }
     }
 }

@@ -16,7 +16,6 @@ pub struct Model {
     pub location_latitude: Option<Decimal>,
     pub location_longitude: Option<Decimal>,
     pub location_zip: String,
-    #[sea_orm(unique)]
     pub created_by: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,

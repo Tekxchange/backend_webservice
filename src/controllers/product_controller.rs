@@ -1,7 +1,14 @@
-use rocket::{response::status::Created, serde::json::Json, Route};
+use rocket::{
+    response::status::{Accepted, Created},
+    serde::json::Json,
+    Route,
+};
 
 use crate::{
-    models::{product::ProductDetails, user::AuthUser},
+    models::{
+        product::{ProductDetails, ProductReturn},
+        user::AuthUser,
+    },
     services::{ProductService, ProductServiceError},
 };
 
@@ -18,16 +25,29 @@ async fn create_product(
     Ok(Created::new(""))
 }
 
-#[get("/product/<id>")]
+#[get("/product/<id>", format = "json")]
 async fn get_product_by_id(
     mut product_service: ProductService,
     id: i64,
-) -> Result<Json<ProductDetails>, ProductServiceError> {
+) -> Result<Json<ProductReturn>, ProductServiceError> {
     let found_product = product_service.get_product_by_id(id).await?;
 
     Ok(Json(found_product))
 }
 
+#[put("/product/<id>", format = "json", data = "<product>")]
+async fn update_product_by_id(
+    mut product_service: ProductService,
+    id: i64,
+    user: AuthUser,
+    product: Json<ProductDetails>,
+) -> Result<Accepted<()>, ProductServiceError> {
+    product_service
+        .update_product_by_id(id, product.0, user)
+        .await?;
+    Ok(Accepted(None))
+}
+
 pub fn routes() -> Vec<Route> {
-    routes![create_product, get_product_by_id]
+    routes![create_product, get_product_by_id, update_product_by_id]
 }
