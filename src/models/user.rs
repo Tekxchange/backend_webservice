@@ -60,6 +60,12 @@ pub struct UserReturnDto {
     pub role: Role,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MinUserReturnDto {
+    pub id: i64,
+    pub username: String
+}
+
 ///
 /// Request guard that will read the JWT from cookies and inject the user into the function
 pub struct AuthUser {
