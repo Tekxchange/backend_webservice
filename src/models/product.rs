@@ -16,6 +16,7 @@ pub struct ProductDetails {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ProductReturn {
     pub title: String,
     pub description: String,
