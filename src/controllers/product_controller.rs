@@ -48,6 +48,22 @@ async fn update_product_by_id(
     Ok(Accepted(None))
 }
 
+#[delete("/product/<id>")]
+async fn delete_product_by_id(
+    mut product_service: ProductService,
+    id: i64,
+    user: AuthUser,
+) -> Result<(), ProductServiceError> {
+    product_service.delete_product_by_id(id, user).await?;
+
+    Ok(())
+}
+
 pub fn routes() -> Vec<Route> {
-    routes![create_product, get_product_by_id, update_product_by_id]
+    routes![
+        create_product,
+        get_product_by_id,
+        update_product_by_id,
+        delete_product_by_id
+    ]
 }

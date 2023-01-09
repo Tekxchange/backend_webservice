@@ -171,4 +171,28 @@ impl ProductService {
 
         Ok(())
     }
+
+    pub async fn delete_product_by_id(
+        &mut self,
+        id: i64,
+        user: AuthUser,
+    ) -> Result<(), ProductServiceError> {
+        let product: ProductActiveModel = ProductEntity::find_by_id(id)
+            .one(&self.db_connection)
+            .await
+            .map_err(|e| ProductServiceError::OrmError(e))?
+            .ok_or(ProductServiceError::NotFound(id))?
+            .into();
+
+        if product.created_by.clone().unwrap() != user.user.id {
+            return Err(ProductServiceError::NotAllowed);
+        }
+
+        product
+            .delete(&self.db_connection)
+            .await
+            .map_err(|e| ProductServiceError::OrmError(e))?;
+
+        Ok(())
+    }
 }
