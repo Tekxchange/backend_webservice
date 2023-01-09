@@ -27,12 +27,14 @@ pub enum ProductServiceError {
     NotFound(i64),
     #[error("You are not authorized to perform changes on this product")]
     NotAllowed,
+    #[error("An unknown error occurred")]
+    Unknown,
 }
 
 impl<'r> Responder<'r, 'static> for ProductServiceError {
     fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
         match self {
-            Self::DbError(_) | Self::OrmError(_) => {
+            Self::DbError(_) | Self::OrmError(_) | Self::Unknown => {
                 Response::build().status(Status::InternalServerError).ok()
             }
             Self::NotFound(_) => {
@@ -45,7 +47,6 @@ impl<'r> Responder<'r, 'static> for ProductServiceError {
                     .status(Status::Forbidden)
                     .ok()
             }
-            _ => Response::build().status(Status::BadRequest).ok(),
         }
     }
 }
