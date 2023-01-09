@@ -10,6 +10,7 @@ pub struct ProductDetails {
     pub country: String,
     pub state: String,
     pub city: String,
+    pub zip: String,
     pub latitude: Option<Decimal>,
     pub longitude: Option<Decimal>
 }

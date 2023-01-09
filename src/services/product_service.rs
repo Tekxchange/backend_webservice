@@ -86,6 +86,7 @@ impl ProductService {
             location_country: ActiveValue::Set(create.country),
             location_latitude: ActiveValue::Set(create.latitude),
             location_longitude: ActiveValue::Set(create.longitude),
+            location_zip: ActiveValue::Set(create.zip),
             ..Default::default()
         };
 
@@ -118,6 +119,7 @@ impl ProductService {
                 state: product.location_state,
                 latitude: product.location_latitude,
                 longitude: product.location_longitude,
+                zip: product.location_zip,
             });
         }
 
