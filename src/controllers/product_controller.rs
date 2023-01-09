@@ -18,6 +18,16 @@ async fn create_product(
     Ok(Created::new(""))
 }
 
+#[get("/product/<id>")]
+async fn get_product_by_id(
+    mut product_service: ProductService,
+    id: i64,
+) -> Result<Json<ProductDetails>, ProductServiceError> {
+    let found_product = product_service.get_product_by_id(id).await?;
+
+    Ok(Json(found_product))
+}
+
 pub fn routes() -> Vec<Route> {
-    routes![create_product]
+    routes![create_product, get_product_by_id]
 }

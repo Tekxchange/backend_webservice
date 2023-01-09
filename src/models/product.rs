@@ -7,6 +7,11 @@ pub struct ProductDetails {
     pub description: String,
     pub title: String,
     pub price: Decimal,
+    pub country: String,
+    pub state: String,
+    pub city: String,
+    pub latitude: Option<Decimal>,
+    pub longitude: Option<Decimal>
 }
 
 #[derive(Serialize, Deserialize, Debug)]

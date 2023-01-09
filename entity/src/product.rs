@@ -10,6 +10,11 @@ pub struct Model {
     pub product_title: String,
     pub description: String,
     pub price: Decimal,
+    pub location_country: String,
+    pub location_state: String,
+    pub location_city: String,
+    pub location_latitude: Option<Decimal>,
+    pub location_longitude: Option<Decimal>,
     #[sea_orm(unique)]
     pub created_by: i64,
     pub created_at: DateTime,

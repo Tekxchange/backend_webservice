@@ -26,6 +26,11 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Product::ProductTitle).string().not_null())
                     .col(ColumnDef::new(Product::Description).string().not_null())
                     .col(ColumnDef::new(Product::Price).decimal().not_null())
+                    .col(ColumnDef::new(Product::LocationCountry).string_len(128).not_null())
+                    .col(ColumnDef::new(Product::LocationState).string_len(128).not_null())
+                    .col(ColumnDef::new(Product::LocationCity).string_len(128).not_null())
+                    .col(ColumnDef::new(Product::LocationLatitude).decimal())
+                    .col(ColumnDef::new(Product::LocationLongitude).decimal())
                     .col(
                         ColumnDef::new(Product::CreatedBy)
                             .big_integer()
@@ -84,6 +89,12 @@ pub enum Product {
     Id,
     ProductTitle,
     Description,
+    LocationLatitude,
+    LocationLongitude,
+    LocationCity,
+    LocationState,
+    LocationCountry,
+    LocationZip,
     Price,
     CreatedBy,
     CreatedAt,
