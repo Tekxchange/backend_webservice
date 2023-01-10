@@ -101,7 +101,6 @@ pub enum Product {
     Id,
     ProductTitle,
     Description,
-    CategoryId,
     LocationLatitude,
     LocationLongitude,
     LocationCity,

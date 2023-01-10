@@ -6,5 +6,6 @@ pub mod category;
 pub mod picture;
 pub mod product;
 pub mod product_audit;
+pub mod product_category;
 pub mod product_picture;
 pub mod user;

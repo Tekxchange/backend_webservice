@@ -19,21 +19,14 @@ pub struct Model {
     pub created_by: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    pub category_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::category::Entity",
-        from = "Column::CategoryId",
-        to = "super::category::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Category,
     #[sea_orm(has_many = "super::product_audit::Entity")]
     ProductAudit,
+    #[sea_orm(has_many = "super::product_category::Entity")]
+    ProductCategory,
     #[sea_orm(has_many = "super::product_picture::Entity")]
     ProductPicture,
     #[sea_orm(
@@ -46,15 +39,15 @@ pub enum Relation {
     User,
 }
 
-impl Related<super::category::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Category.def()
-    }
-}
-
 impl Related<super::product_audit::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProductAudit.def()
+    }
+}
+
+impl Related<super::product_category::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ProductCategory.def()
     }
 }
 
