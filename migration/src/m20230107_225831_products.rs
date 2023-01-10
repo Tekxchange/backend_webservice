@@ -48,11 +48,7 @@ impl MigrationTrait for Migration {
                             .string_len(64)
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(Product::CreatedBy)
-                            .big_integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Product::CreatedBy).big_integer().not_null())
                     .col(
                         ColumnDef::new(Product::CreatedAt)
                             .timestamp()
@@ -105,6 +101,7 @@ pub enum Product {
     Id,
     ProductTitle,
     Description,
+    CategoryId,
     LocationLatitude,
     LocationLongitude,
     LocationCity,

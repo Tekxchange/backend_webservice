@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod category;
 pub mod picture;
 pub mod product;
 pub mod product_audit;
