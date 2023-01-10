@@ -50,9 +50,9 @@ impl MigrationTrait for Migration {
             manager.get_database_backend(),
             String::from(
                 r#"
-                            CREATE TRIGGER "category_timestamp" BEFORE INSERT OR UPDATE ON "category"
-                            FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-                        "#,
+                CREATE TRIGGER "category_timestamp" BEFORE INSERT OR UPDATE ON "category"
+                FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
+                "#,
             ),
         );
         manager.get_connection().execute(stmt).await?;
@@ -124,11 +124,32 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await
+            .await?;
+
+        let stmt = Statement::from_string(
+            manager.get_database_backend(),
+            String::from(
+                r#"
+                CREATE TRIGGER "product_category_timestamp" BEFORE INSERT OR UPDATE ON "product_category"
+                FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
+            "#,
+            ),
+        );
+        manager.get_connection().execute(stmt).await?;
+
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Replace the sample below with your own migration scripts
+        manager
+            .drop_table(
+                Table::drop()
+                    .if_exists()
+                    .table(ProductCategory::Table)
+                    .to_owned(),
+            )
+            .await?;
+
         manager
             .drop_table(Table::drop().if_exists().table(Category::Table).to_owned())
             .await
