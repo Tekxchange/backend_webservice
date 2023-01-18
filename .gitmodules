@@ -1,0 +1,6 @@
+[submodule "tekxchange-entities"]
+	path = tekxchange-entities
+	url = git@github.com:dbidwell94/tekxchange-entities.git
+[submodule "tekxchange-migrations"]
+	path = tekxchange-migrations
+	url = git@github.com:dbidwell94/tekxchange-migrations.git
