@@ -70,7 +70,7 @@ impl<'r> FromRequest<'r> for UserService {
     type Error = UserServiceError;
 
     async fn from_request(_: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let secret = env::var("SECRET").unwrap();
+        let secret = env::var("ROCKET_SECRET_KEY").unwrap();
 
         let key = Hmac::new_from_slice(secret.as_bytes()).map_err(|_| UserServiceError::Unknown);
         if let Err(e) = key {
@@ -94,7 +94,7 @@ impl<'r> FromRequest<'r> for UserService {
 
 impl UserService {
     pub fn new(db_connection: DatabaseConnection) -> Self {
-        let secret = env::var("SECRET").unwrap();
+        let secret = env::var("ROCKET_SECRET_KEY").unwrap();
 
         let key = Hmac::new_from_slice(secret.as_bytes()).unwrap();
         Self {
