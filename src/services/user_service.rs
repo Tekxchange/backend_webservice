@@ -33,8 +33,6 @@ pub enum UserServiceError {
     OrmError(sea_orm::DbErr),
     #[error("User with that email, username, or id does not exist")]
     UserNotFound,
-    #[error("Invalid JWT was provided")]
-    InvalidToken,
     #[error("Incorrect password provided")]
     InvalidPassword,
     #[error("An unknown error occurred")]
@@ -44,7 +42,7 @@ pub enum UserServiceError {
 impl<'r> Responder<'r, 'static> for UserServiceError {
     fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
         match self {
-            Self::DuplicateUserError | Self::InvalidPassword | Self::InvalidToken => {
+            Self::DuplicateUserError | Self::InvalidPassword => {
                 Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
                     .status(Status::BadRequest)
                     .ok()
@@ -147,28 +145,6 @@ impl UserService {
             .await
             .map_err(|e| UserServiceError::OrmError(e))?;
         Ok(created_user.id)
-    }
-
-    pub async fn validate_token(&mut self, token: &str) -> Result<UserModel, UserServiceError> {
-        use jwt::VerifyWithKey;
-
-        let claims: BTreeMap<String, String> = token
-            .verify_with_key(&self.jwt_key)
-            .map_err(|_| UserServiceError::InvalidToken)?;
-
-        let user_id = claims.get("sub");
-        if let None = user_id {
-            return Err(UserServiceError::InvalidToken);
-        }
-        let user_id = user_id
-            .unwrap()
-            .parse::<i64>()
-            .map_err(|_| UserServiceError::Unknown)?;
-
-        Ok(self
-            .get_user_by_id(&user_id)
-            .await?
-            .ok_or_else(|| UserServiceError::InvalidToken)?)
     }
 
     async fn get_by_email(&mut self, email: &str) -> Result<Option<UserModel>, UserServiceError> {
