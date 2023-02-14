@@ -14,15 +14,15 @@ services:
     depends_on:
       - db
 
-  backend:
-    build:
-      context: .
-      dockerfile: ./devel.Dockerfile
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-    env_file:
-      - .env
-    volumes:
-      - ./:/usr/src/app:z
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: ./devel.Dockerfile
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - db
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - ./:/usr/src/app:z
