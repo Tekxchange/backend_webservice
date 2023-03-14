@@ -23,7 +23,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build Docker image
-      run: docker build -t docker.pkg.github.com/Tekxchange/backend_webservice/backend_webservice:latest --target RUNNER .
+      run: docker build -t docker.pkg.github.com/tekxchange/backend_webservice/backend_webservice:latest --target RUNNER .
 
     - name: Publish Docker image
-      run: docker image push docker.pkg.github.com/Tekxchange/backend_webservice/backend_webservice:latest
+      run: docker image push docker.pkg.github.com/tekxchange/backend_webservice/backend_webservice:latest
