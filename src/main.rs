@@ -16,7 +16,7 @@ pub async fn rocket() -> _ {
     let conn = db::establish_connection().await;
 
     if conn.is_err() {
-        println!("{conn:?}");
+        panic!("{conn:?}");
     }
     let conn = conn.unwrap();
 
