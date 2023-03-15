@@ -13,7 +13,13 @@ use crate::models::user::UserRegister;
 #[launch]
 pub async fn rocket() -> _ {
     dotenvy::dotenv().ok();
-    let conn = db::establish_connection().await.unwrap();
+    let conn = db::establish_connection().await;
+
+    if conn.is_err() {
+        println!("{conn:?}");
+    }
+    let conn = conn.unwrap();
+
     Migrator::up(&conn, None).await.unwrap();
 
     let mut user_service = UserService::new(conn);
