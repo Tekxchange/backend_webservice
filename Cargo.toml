@@ -11,7 +11,7 @@ rust-argon2 = "^1"
 chrono = {version = "^0", features = ["serde"]}
 dotenvy = "^0"
 rocket = {version = "^0.5.0-rc.2", features = ["json", "secrets"]}
-sea-orm = { version = "^0", features = ["sqlx-postgres", "runtime-tokio-native-tls"] }
+sea-orm = { version = "0.11.1", features = ["sqlx-postgres", "runtime-tokio-native-tls"] }
 serde = {version = "^1", features = ["derive"]}
 serde_json = "^1"
 thiserror = "^1"

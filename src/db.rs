@@ -1,5 +1,5 @@
 use rocket::{http::Status, response::Responder, Response};
-use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
+use sea_orm::{Database, DatabaseConnection, DbErr};
 use std::env;
 use thiserror::Error;
 
