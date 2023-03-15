@@ -22,6 +22,8 @@ hmac = "^0"
 sha2 = "^0"
 rand = "^0"
 reqwest = {version = "^0", features = ["json"]}
+lazy_static = "^1"
+regex = "^1"
 
 [dev-dependencies]
 tokio = {version = "^1", features = ["macros"]}

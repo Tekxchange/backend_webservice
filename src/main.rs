@@ -37,7 +37,7 @@ pub async fn rocket() -> _ {
             password: admin_password,
             username: crate::models::user::ADMIN_USERNAME.to_owned(),
         };
-        let user_id = user_service.create_user(user_register).await.unwrap();
+        let user_id = user_service.create_user(user_register, true).await.unwrap();
         user_service
             .update_role_for_user(user_id, models::role::Role::Admin)
             .await

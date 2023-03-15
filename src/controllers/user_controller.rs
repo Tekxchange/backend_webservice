@@ -15,7 +15,7 @@ async fn register(
     user_register: Json<UserRegister>,
 ) -> Result<Created<()>, UserServiceError> {
     user_service
-        .create_user(user_register.0)
+        .create_user(user_register.0, false)
         .await?;
 
     let created_response = Created::new("");

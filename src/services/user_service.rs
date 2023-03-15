@@ -10,7 +10,9 @@ use chrono::offset::Utc;
 use entity::user::{Entity as UserEntity, Model as UserModel};
 use hmac::{Hmac, Mac};
 use jwt::{AlgorithmType, Header as JwtHeader};
+use lazy_static::lazy_static;
 use rand::{distributions::Alphanumeric, Rng};
+use regex::Regex;
 use rocket::{
     http::Status,
     request::{self, FromRequest},
@@ -22,6 +24,11 @@ use serde_json::json;
 use sha2::Sha512;
 use std::{collections::BTreeMap, env};
 use thiserror::Error;
+
+lazy_static! {
+    static ref INVALID_USERNAME_REGEX: Regex =
+        Regex::new(r"(?i)(admin|moderator|fuck|ass|shit|cunt|piss|wank)").unwrap();
+}
 
 #[derive(Error, Debug)]
 pub enum UserServiceError {
@@ -37,12 +44,14 @@ pub enum UserServiceError {
     InvalidPassword,
     #[error("An unknown error occurred")]
     Unknown,
+    #[error("The request contains forbidden words")]
+    ForbiddenWords,
 }
 
 impl<'r> Responder<'r, 'static> for UserServiceError {
     fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
         match self {
-            Self::DuplicateUserError | Self::InvalidPassword => {
+            Self::DuplicateUserError | Self::InvalidPassword | Self::ForbiddenWords => {
                 Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
                     .status(Status::BadRequest)
                     .ok()
@@ -105,6 +114,7 @@ impl UserService {
     pub async fn create_user(
         &mut self,
         mut register: UserRegister,
+        bypass_name_check: bool,
     ) -> Result<i64, UserServiceError> {
         use entity::user;
 
@@ -120,6 +130,10 @@ impl UserService {
 
         if found_users > 0 {
             return Err(UserServiceError::DuplicateUserError);
+        }
+
+        if !bypass_name_check && INVALID_USERNAME_REGEX.is_match(&register.username) {
+            return Err(UserServiceError::ForbiddenWords);
         }
 
         let salt: String = rand::thread_rng()
