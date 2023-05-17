@@ -1,9 +1,6 @@
-use crate::{
-    db::establish_connection,
-    models::{
-        role::Role,
-        user::{UserLogin, UserRegister},
-    },
+use crate::models::{
+    role::Role,
+    user::{UserLogin, UserRegister},
 };
 use argon2::{self, Config};
 use chrono::offset::Utc;
@@ -15,9 +12,10 @@ use rand::{distributions::Alphanumeric, Rng};
 use regex::Regex;
 use rocket::{
     http::Status,
+    outcome::{try_outcome, IntoOutcome},
     request::{self, FromRequest},
     response::Responder,
-    Request, Response,
+    Request, Response, State,
 };
 use sea_orm::{prelude::*, query::Condition, ActiveValue, DatabaseConnection, Set};
 use serde_json::json;
@@ -35,8 +33,6 @@ pub enum UserServiceError {
     #[error("This username and/or email already exists")]
     DuplicateUserError,
     #[error(transparent)]
-    DbError(crate::db::DbError),
-    #[error(transparent)]
     OrmError(sea_orm::DbErr),
     #[error("User with that email, username, or id does not exist")]
     UserNotFound,
@@ -46,6 +42,25 @@ pub enum UserServiceError {
     Unknown,
     #[error("The request contains forbidden words")]
     ForbiddenWords,
+}
+
+pub struct UserInit {
+    pub key: Hmac<Sha512>,
+    pub signing_alg: AlgorithmType,
+}
+
+impl UserInit {
+    pub fn new() -> anyhow::Result<Self> {
+        let secret = env::var("ROCKET_SECRET_KEY").map_err(|e| anyhow::anyhow!(e))?;
+
+        let key: Hmac<Sha512> =
+            Hmac::new_from_slice(secret.as_bytes()).map_err(|_| UserServiceError::Unknown)?;
+
+        Ok(Self {
+            key,
+            signing_alg: AlgorithmType::Hs512,
+        })
+    }
 }
 
 impl<'r> Responder<'r, 'static> for UserServiceError {
@@ -74,28 +89,19 @@ pub struct UserService {
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for UserService {
-    type Error = UserServiceError;
+    type Error = ();
 
-    async fn from_request(_: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let secret = env::var("ROCKET_SECRET_KEY").unwrap();
+    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let user_init: &State<UserInit> = try_outcome!(req.guard::<&State<UserInit>>().await);
 
-        let key = Hmac::new_from_slice(secret.as_bytes()).map_err(|_| UserServiceError::Unknown);
-        if let Err(e) = key {
-            return request::Outcome::Failure((rocket::http::Status::InternalServerError, e));
-        }
-        let key: Hmac<Sha512> = key.unwrap();
-
-        match establish_connection()
-            .await
-            .map_err(|e| UserServiceError::DbError(e))
-        {
-            Ok(conn) => request::Outcome::Success(Self {
-                db_connection: conn,
-                jwt_key: key,
-                signing_alg: AlgorithmType::Hs512,
-            }),
-            Err(e) => request::Outcome::Failure((rocket::http::Status::InternalServerError, e)),
-        }
+        req.rocket()
+            .state::<DatabaseConnection>()
+            .map(|conn| Self {
+                db_connection: conn.clone(),
+                jwt_key: user_init.key.clone(),
+                signing_alg: user_init.signing_alg,
+            })
+            .or_forward(())
     }
 }
 

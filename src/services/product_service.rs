@@ -1,7 +1,7 @@
 use entity::product::{ActiveModel as ProductActiveModel, Entity as ProductEntity};
 use rocket::{
     http::Status,
-    outcome::Outcome,
+    outcome::IntoOutcome,
     request::{self, FromRequest},
     response::Responder,
     Request, Response,
@@ -12,18 +12,13 @@ use sea_orm::{
 use serde_json::json;
 use thiserror::Error;
 
-use crate::{
-    db::establish_connection,
-    models::{
-        product::{ProductDetails, ProductReturn},
-        user::{AuthUser, MinUserReturnDto},
-    },
+use crate::models::{
+    product::{ProductDetails, ProductReturn},
+    user::{AuthUser, MinUserReturnDto},
 };
 
 #[derive(Error, Debug)]
 pub enum ProductServiceError {
-    #[error(transparent)]
-    DbError(crate::db::DbError),
     #[error(transparent)]
     OrmError(sea_orm::DbErr),
     #[error("Product with id {0} not found")]
@@ -37,7 +32,7 @@ pub enum ProductServiceError {
 impl<'r> Responder<'r, 'static> for ProductServiceError {
     fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
         match self {
-            Self::DbError(_) | Self::OrmError(_) | Self::Unknown => {
+            Self::OrmError(_) | Self::Unknown => {
                 Response::build().status(Status::InternalServerError).ok()
             }
             Self::NotFound(_) => {
@@ -62,18 +57,19 @@ pub struct ProductService {
 impl<'r> FromRequest<'r> for ProductService {
     type Error = ProductServiceError;
 
-    async fn from_request(_: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        match establish_connection()
-            .await
-            .map_err(|e| ProductServiceError::DbError(e))
-        {
-            Err(e) => return Outcome::Failure((Status::InternalServerError, e)),
-            Ok(db) => return Outcome::Success(Self { db_connection: db }),
-        }
+    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        req.rocket()
+            .state::<DatabaseConnection>()
+            .map(|db| Self::new(db.clone()))
+            .or_forward(())
     }
 }
 
 impl ProductService {
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db_connection: db }
+    }
+
     pub async fn create_new_product(
         &mut self,
         create: ProductDetails,

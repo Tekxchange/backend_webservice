@@ -69,7 +69,7 @@ async fn login(
         .same_site(SameSite::Lax)
         .finish();
 
-    cookies.add_private(token_cookie);
+    cookies.add(token_cookie);
 
     Ok(())
 }
@@ -79,7 +79,7 @@ async fn logout(cookies: &CookieJar<'_>) {
     let token_cookie = cookies.get_pending("token");
 
     if let Some(cookie) = token_cookie {
-        cookies.remove_private(cookie);
+        cookies.remove(cookie);
     }
 }
 

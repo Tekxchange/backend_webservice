@@ -87,7 +87,7 @@ impl<'r> FromRequest<'r> for AuthUser {
         use rocket::http::Status;
         let token = req
             .cookies()
-            .get_private("token")
+            .get("token")
             .map(|cookie| cookie.value().to_owned());
         if let None = token {
             return Outcome::Failure((Status::Unauthorized, ()));

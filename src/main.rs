@@ -5,7 +5,7 @@ mod db;
 mod models;
 mod services;
 use migration::{Migrator, MigratorTrait};
-use services::UserService;
+use services::{UserInit, UserService};
 use std::env;
 
 use crate::models::user::UserRegister;
@@ -19,10 +19,11 @@ pub async fn rocket() -> _ {
         panic!("{conn:?}");
     }
     let conn = conn.unwrap();
+    let user_init = UserInit::new().unwrap();
 
     Migrator::up(&conn, None).await.unwrap();
 
-    let mut user_service = UserService::new(conn);
+    let mut user_service = UserService::new(conn.clone());
     let found_admin = user_service
         .username_exists(crate::models::user::ADMIN_USERNAME)
         .await
@@ -45,4 +46,6 @@ pub async fn rocket() -> _ {
     }
 
     controllers::mount_routes(rocket::build())
+        .manage(conn)
+        .manage(user_init)
 }
