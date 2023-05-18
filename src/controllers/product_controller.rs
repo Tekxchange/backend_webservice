@@ -25,7 +25,7 @@ async fn create_product(
     Ok(Created::new(""))
 }
 
-#[get("/product/<id>", format = "json")]
+#[get("/product?<id>", format = "json")]
 async fn get_product_by_id(
     mut product_service: ProductService,
     id: i64,
@@ -35,7 +35,7 @@ async fn get_product_by_id(
     Ok(Json(found_product))
 }
 
-#[put("/product/<id>", format = "json", data = "<product>")]
+#[put("/product?<id>", format = "json", data = "<product>")]
 async fn update_product_by_id(
     mut product_service: ProductService,
     id: i64,
@@ -48,7 +48,7 @@ async fn update_product_by_id(
     Ok(Accepted(None))
 }
 
-#[delete("/product/<id>")]
+#[delete("/product?<id>")]
 async fn delete_product_by_id(
     mut product_service: ProductService,
     id: i64,

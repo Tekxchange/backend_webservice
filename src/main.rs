@@ -4,8 +4,10 @@ mod controllers;
 mod db;
 mod models;
 mod services;
+mod statsd;
 use migration::{Migrator, MigratorTrait};
 use services::{UserInit, UserService};
+use statsd::Statsd;
 use std::env;
 
 use crate::models::user::UserRegister;
@@ -48,4 +50,5 @@ pub async fn rocket() -> _ {
     controllers::mount_routes(rocket::build())
         .manage(conn)
         .manage(user_init)
+        .attach(Statsd::default())
 }
