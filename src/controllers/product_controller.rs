@@ -25,7 +25,7 @@ async fn create_product(
     Ok(Created::new(""))
 }
 
-#[get("/product?<id>", format = "json")]
+#[get("/product?<id>")]
 async fn get_product_by_id(
     mut product_service: ProductService,
     id: i64,

@@ -6,7 +6,7 @@ mod models;
 mod services;
 mod statsd;
 use migration::{Migrator, MigratorTrait};
-use services::{UserInit, UserService};
+use services::UserService;
 use statsd::Statsd;
 use std::env;
 
@@ -15,13 +15,8 @@ use crate::models::user::UserRegister;
 #[launch]
 pub async fn rocket() -> _ {
     dotenvy::dotenv().ok();
-    let conn = db::establish_connection().await;
-
-    if conn.is_err() {
-        panic!("{conn:?}");
-    }
-    let conn = conn.unwrap();
-    let user_init = UserInit::new().unwrap();
+    let conn = db::establish_connection().await.unwrap();
+    let redis = db::redis_connection().await.unwrap();
 
     Migrator::up(&conn, None).await.unwrap();
 
@@ -49,6 +44,6 @@ pub async fn rocket() -> _ {
 
     controllers::mount_routes(rocket::build())
         .manage(conn)
-        .manage(user_init)
+        .manage(redis)
         .attach(Statsd::default())
 }

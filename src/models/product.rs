@@ -20,6 +20,6 @@ pub struct ProductDetails {
 pub struct ProductReturn {
     pub title: String,
     pub description: String,
-    pub price: f64,
+    pub price: Decimal,
     pub created_by: MinUserReturnDto,
 }

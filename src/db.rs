@@ -25,3 +25,15 @@ pub async fn establish_connection() -> Result<DatabaseConnection, DbError> {
         .map_err(|e| DbError::ConnectionError(db_url, e))?;
     Ok(res)
 }
+
+pub async fn redis_connection() -> anyhow::Result<redis::aio::Connection> {
+    let redis_url = env::var("REDIS_URL").or_else(|e| Err(anyhow::anyhow!(e)))?;
+    let client = redis::Client::open(redis_url).map_err(|e| anyhow::anyhow!(e))?;
+
+    let conn = client
+        .get_async_connection()
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
+
+    Ok(conn)
+}

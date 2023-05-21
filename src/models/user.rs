@@ -84,53 +84,6 @@ impl<'r> FromRequest<'r> for AuthUser {
     type Error = ();
 
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        use rocket::http::Status;
-        let token = req
-            .cookies()
-            .get("token")
-            .map(|cookie| cookie.value().to_owned());
-        if let None = token {
-            return Outcome::Failure((Status::Unauthorized, ()));
-        }
-        let token = token.unwrap();
-
-        let client = reqwest::Client::new();
-
-        let res = client
-            .post("http://localhost:8002/api/auth/validate_token")
-            .body(String::from(token))
-            .send()
-            .await;
-
-        println!("{res:?}");
-
-        if let Err(_) = res {
-            return Outcome::Failure((Status::Unauthorized, ()));
-        }
-
-        let res = res.unwrap();
-
-        let auth_user = res.json::<AuthServiceModel>().await;
-
-        if let Err(_) = auth_user {
-            return Outcome::Failure((Status::Unauthorized, ()));
-        }
-
-        let auth_user = auth_user.unwrap();
-
-        let user_service = UserService::from_request(req).await.succeeded();
-        if let None = user_service {
-            return Outcome::Failure((Status::InternalServerError, ()));
-        }
-        let mut user_service = user_service.unwrap();
-
-        let user = user_service.get_user_by_id(&auth_user.id).await;
-        if let Err(_) = user {
-            return Outcome::Failure((Status::InternalServerError, ()));
-        }
-        let user = user.unwrap().unwrap();
-        return Outcome::Success(Self {
-            user: user.try_into().unwrap(),
-        });
+        todo!()
     }
 }

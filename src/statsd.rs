@@ -41,9 +41,10 @@ impl Fairing for Statsd {
         req.local_cache(|| RequestTimer(Some(start_time)));
     }
 
-    async fn on_response<'r>(&self, request: &'r Request<'_>, _: &mut Response<'r>) {
+    async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
         let method = request.method().as_str();
         let path = request.uri().path().as_str().replace("/", ".");
+        let status = response.status().to_string();
 
         let stat = format!("request.{method}.{path}");
 
@@ -53,5 +54,8 @@ impl Fairing for Statsd {
             let diff = (end_time - start_time.time()).num_milliseconds() as u64;
             self.client.time(&stat, diff).unwrap();
         }
+        self.client
+            .incr(&format!("request.{method}.{path}.{status}"))
+            .unwrap();
     }
 }

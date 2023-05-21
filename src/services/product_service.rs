@@ -117,7 +117,7 @@ impl ProductService {
             return Ok(ProductReturn {
                 title: prod.product_title,
                 description: prod.description,
-                price: f64::try_from(prod.price).map_err(|_| ProductServiceError::Unknown)?,
+                price: prod.price,
                 created_by: MinUserReturnDto {
                     id: user.id,
                     username: user.username,
