@@ -1,11 +1,8 @@
 use chrono::NaiveDateTime;
 use entity::user::Model as UserModel;
-use rocket::outcome::Outcome;
 use rocket::request::{self, FromRequest};
 use rocket::Request;
 use serde::{Deserialize, Serialize};
-
-use crate::services::UserService;
 
 use super::role::Role;
 
@@ -83,7 +80,7 @@ pub struct AuthUser {
 impl<'r> FromRequest<'r> for AuthUser {
     type Error = ();
 
-    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+    async fn from_request(_: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
         todo!()
     }
 }

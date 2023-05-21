@@ -36,8 +36,6 @@ pub enum UserServiceError {
     UserNotFound,
     #[error("Incorrect password provided")]
     InvalidPassword,
-    #[error("An unknown error occurred")]
-    Unknown,
     #[error("The request contains forbidden words")]
     ForbiddenWords,
     #[error(transparent)]
@@ -86,7 +84,7 @@ impl UserService {
     }
 
     pub async fn create_user(
-        &mut self,
+        &self,
         mut register: UserRegister,
         bypass_name_check: bool,
     ) -> Result<i64, UserServiceError> {
@@ -126,7 +124,7 @@ impl UserService {
         Ok(id)
     }
 
-    async fn get_by_email(&mut self, email: &str) -> Result<Option<UserModel>, UserServiceError> {
+    async fn get_by_email(&self, email: &str) -> Result<Option<UserModel>, UserServiceError> {
         use entity::user;
         let found = UserEntity::find()
             .filter(Condition::all().add(user::Column::Email.like(email)))
@@ -138,7 +136,7 @@ impl UserService {
     }
 
     async fn get_by_username(
-        &mut self,
+        &self,
         username: &str,
     ) -> Result<Option<UserModel>, UserServiceError> {
         use entity::user;
@@ -152,7 +150,7 @@ impl UserService {
     }
 
     pub async fn get_user_by_id(
-        &mut self,
+        &self,
         id: &i64,
     ) -> Result<Option<UserModel>, UserServiceError> {
         Ok(UserEntity::find_by_id(*id)
@@ -161,7 +159,7 @@ impl UserService {
             .map_err(|e| UserServiceError::OrmError(e))?)
     }
 
-    pub async fn username_exists(&mut self, username: &str) -> Result<bool, UserServiceError> {
+    pub async fn username_exists(&self, username: &str) -> Result<bool, UserServiceError> {
         use entity::user;
 
         let found_count = UserEntity::find()
@@ -173,7 +171,7 @@ impl UserService {
         return Ok(found_count > 0);
     }
 
-    pub async fn email_exists(&mut self, email: &str) -> Result<bool, UserServiceError> {
+    pub async fn email_exists(&self, email: &str) -> Result<bool, UserServiceError> {
         use entity::user;
 
         let found_count = UserEntity::find()
@@ -185,7 +183,7 @@ impl UserService {
         return Ok(found_count > 0);
     }
 
-    pub async fn login(&mut self, login: UserLogin) -> Result<String, UserServiceError> {
+    pub async fn login(&self, login: UserLogin) -> Result<String, UserServiceError> {
         let mut user: Option<UserModel> = None;
 
         if let Some(ref email) = login.email {
@@ -210,7 +208,7 @@ impl UserService {
     }
 
     pub async fn update_role_for_user(
-        &mut self,
+        &self,
         user_id: i64,
         new_role: Role,
     ) -> Result<(), UserServiceError> {

@@ -1,27 +1,8 @@
 use crate::{
-    models::user::{AuthUser, UserLogin, UserRegister, UserReturnDto},
+    models::user::{AuthUser, UserReturnDto},
     services::{UserService, UserServiceError},
 };
-use rocket::{
-    http::{Cookie, CookieJar, SameSite},
-    response::status::Created,
-    serde::json::Json,
-    Route,
-};
-
-#[post("/register", format = "json", data = "<user_register>")]
-async fn register(
-    mut user_service: UserService,
-    user_register: Json<UserRegister>,
-) -> Result<Created<()>, UserServiceError> {
-    user_service
-        .create_user(user_register.0, false)
-        .await?;
-
-    let created_response = Created::new("");
-
-    Ok(created_response)
-}
+use rocket::{serde::json::Json, Route};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct UsernameExistsDto {
@@ -30,12 +11,10 @@ struct UsernameExistsDto {
 
 #[post("/username_exists", format = "json", data = "<username>")]
 async fn username_exists(
-    mut user_service: UserService,
+    user_service: UserService,
     username: Json<UsernameExistsDto>,
 ) -> Result<Json<bool>, UserServiceError> {
-    let found = user_service
-        .username_exists(&username.0.username)
-        .await?;
+    let found = user_service.username_exists(&username.0.username).await?;
 
     Ok(Json(found))
 }
@@ -47,40 +26,12 @@ struct EmailExistsDto {
 
 #[post("/email_exists", format = "json", data = "<email>")]
 async fn email_exists(
-    mut user_service: UserService,
+    user_service: UserService,
     email: Json<EmailExistsDto>,
 ) -> Result<Json<bool>, UserServiceError> {
-    let found = user_service
-        .email_exists(&email.0.email)
-        .await?;
+    let found = user_service.email_exists(&email.0.email).await?;
 
     Ok(Json(found))
-}
-
-#[post("/login", format = "json", data = "<login>")]
-async fn login(
-    mut user_service: UserService,
-    login: Json<UserLogin>,
-    cookies: &CookieJar<'_>,
-) -> Result<(), UserServiceError> {
-    let token = user_service.login(login.0).await?;
-
-    let token_cookie = Cookie::build("token", token)
-        .same_site(SameSite::Lax)
-        .finish();
-
-    cookies.add(token_cookie);
-
-    Ok(())
-}
-
-#[get("/logout")]
-async fn logout(cookies: &CookieJar<'_>) {
-    let token_cookie = cookies.get_pending("token");
-
-    if let Some(cookie) = token_cookie {
-        cookies.remove(cookie);
-    }
 }
 
 #[get("/user/info")]
@@ -96,12 +47,5 @@ async fn get_user_info(auth_user: AuthUser) -> Json<UserReturnDto> {
 }
 
 pub fn routes() -> Vec<Route> {
-    return routes![
-        register,
-        username_exists,
-        email_exists,
-        login,
-        logout,
-        get_user_info
-    ];
+    return routes![username_exists, email_exists, get_user_info];
 }

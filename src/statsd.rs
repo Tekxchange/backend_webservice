@@ -43,8 +43,8 @@ impl Fairing for Statsd {
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
         let method = request.method().as_str();
-        let path = request.uri().path().as_str().replace("/", ".");
-        let status = response.status().to_string();
+        let path = request.uri().path().as_str();
+        let status = response.status().code;
 
         let stat = format!("request.{method}.{path}");
 

@@ -20,7 +20,7 @@ pub async fn rocket() -> _ {
 
     Migrator::up(&conn, None).await.unwrap();
 
-    let mut user_service = UserService::new(conn.clone());
+    let user_service = UserService::new(conn.clone());
     let found_admin = user_service
         .username_exists(crate::models::user::ADMIN_USERNAME)
         .await
