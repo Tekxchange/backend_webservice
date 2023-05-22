@@ -29,12 +29,14 @@ async fn login(
     Ok(Json(token))
 }
 
-#[post("/refresh")]
+#[get("/refresh")]
 async fn refresh_login(
     mut auth_service: AuthService,
     auth_user: RefreshAuthUser,
 ) -> Result<Json<String>, AuthServiceError> {
-    let jwt = auth_service.generate_jwt(&auth_user.user).await?;
+    let jwt = auth_service
+        .generate_jwt(&auth_user.user, &auth_user.refresh_token)
+        .await?;
 
     Ok(Json(jwt))
 }

@@ -43,6 +43,9 @@ pub enum AuthServiceError {
     #[error("Invalid token")]
     #[response(status = 401)]
     InvalidJWT(AnyhowResponder),
+    #[error("Missing refresh token")]
+    #[response(status = 401)]
+    MissingRefreshToken(AnyhowResponder),
 }
 
 pub struct AuthService {
@@ -200,8 +203,54 @@ impl AuthService {
         Ok(token)
     }
 
-    pub async fn generate_jwt(&mut self, user: &UserJwtDto) -> Result<String, AuthServiceError> {
+    pub async fn validate_refresh_token(
+        &mut self,
+        user_id: i64,
+    ) -> Result<Option<String>, AuthServiceError> {
+        let mut found = self
+            .redis
+            .get::<i64, Option<String>>(user_id)
+            .await
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+        if found.is_none() {
+            found = RefreshEntity::find()
+                .filter(refresh_token::Column::UserId.eq(user_id))
+                .one(&self.db)
+                .await
+                .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
+                .map(|r_token| r_token.token);
+
+            if let Some(ref token) = found {
+                self.redis
+                    .set::<i64, &str, ()>(user_id, token)
+                    .await
+                    .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+            }
+        }
+
+        Ok(found)
+    }
+
+    pub async fn generate_jwt(
+        &mut self,
+        user: &UserJwtDto,
+        refresh: &str,
+    ) -> Result<String, AuthServiceError> {
         let claims = Claims::with_custom_claims(user.clone(), Duration::from_mins(30));
+
+        let stored_refresh = self.validate_refresh_token(user.id).await?;
+        if let None = stored_refresh {
+            return Err(AuthServiceError::MissingRefreshToken(AnyhowResponder(
+                anyhow!("Missing refresh token"),
+            )));
+        }
+        let stored_refresh = stored_refresh.unwrap();
+        if stored_refresh != refresh {
+            return Err(AuthServiceError::MissingRefreshToken(AnyhowResponder(
+                anyhow!("Mismatched refresh token"),
+            )));
+        }
 
         let token = self
             .signing_key
@@ -269,7 +318,7 @@ impl AuthService {
         };
 
         let refresh_token = self.generate_refresh_token(user).await?;
-        let jwt = self.generate_jwt(&user_jwt).await?;
+        let jwt = self.generate_jwt(&user_jwt, &refresh_token).await?;
 
         Ok(LoginReturn { jwt, refresh_token })
     }
