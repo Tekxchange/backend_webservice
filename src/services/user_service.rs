@@ -1,9 +1,11 @@
+use super::auth_service::AuthServiceError;
 use crate::{
+    dtos::auth::LoginReturn,
     models::{
         role::Role,
         user::{UserLogin, UserRegister},
     },
-    services::auth_service::AuthService, dtos::auth::LoginReturn,
+    services::auth_service::AuthService,
 };
 use entity::user::{ActiveModel as UserActiveModel, Entity as UserEntity, Model as UserModel};
 use lazy_static::lazy_static;
@@ -19,8 +21,6 @@ use sea_orm::{prelude::*, query::Condition, ActiveValue, DatabaseConnection, Set
 use serde_json::json;
 use thiserror::Error;
 
-use super::auth_service::{self, AuthServiceError};
-
 lazy_static! {
     static ref INVALID_USERNAME_REGEX: Regex =
         Regex::new(r"(?i)(admin|moderator|fuck|ass|shit|cunt|piss|wank)").unwrap();
@@ -34,8 +34,6 @@ pub enum UserServiceError {
     OrmError(sea_orm::DbErr),
     #[error("User with that email, username, or id does not exist")]
     UserNotFound,
-    #[error("Incorrect password provided")]
-    InvalidPassword,
     #[error("The request contains forbidden words")]
     ForbiddenWords,
     #[error(transparent)]
@@ -45,7 +43,7 @@ pub enum UserServiceError {
 impl<'r> Responder<'r, 'static> for UserServiceError {
     fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
         match self {
-            Self::DuplicateUserError | Self::InvalidPassword | Self::ForbiddenWords => {
+            Self::DuplicateUserError | Self::ForbiddenWords => {
                 Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
                     .status(Status::BadRequest)
                     .ok()

@@ -1,8 +1,8 @@
-use std::{
-    fs::OpenOptions,
-    io::{Read, Write},
+use crate::{
+    dtos::auth::LoginReturn,
+    models::{role::Role, user::UserReturnDto},
+    AnyhowResponder,
 };
-
 use anyhow::anyhow;
 use argon2::{
     password_hash::{rand_core::OsRng, SaltString},
@@ -24,13 +24,11 @@ use rocket::{
 };
 use sea_orm::DatabaseConnection;
 use sea_orm::{prelude::*, ActiveValue};
-use thiserror::Error;
-
-use crate::{
-    dtos::auth::LoginReturn,
-    models::{role::Role, user::UserReturnDto},
-    AnyhowResponder,
+use std::{
+    fs::OpenOptions,
+    io::{Read, Write},
 };
+use thiserror::Error;
 
 const KEY_LOCATION: &str = "./auth.key";
 

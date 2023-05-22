@@ -1,3 +1,7 @@
+use crate::models::{
+    product::{ProductDetails, ProductReturn},
+    user::{AuthUser, MinUserReturnDto},
+};
 use entity::product::{ActiveModel as ProductActiveModel, Entity as ProductEntity};
 use rocket::{
     http::Status,
@@ -11,11 +15,6 @@ use sea_orm::{
 };
 use serde_json::json;
 use thiserror::Error;
-
-use crate::models::{
-    product::{ProductDetails, ProductReturn},
-    user::{AuthUser, MinUserReturnDto},
-};
 
 #[derive(Error, Debug)]
 pub enum ProductServiceError {
