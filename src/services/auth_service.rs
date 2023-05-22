@@ -1,6 +1,6 @@
 use crate::{
     dtos::auth::LoginReturn,
-    models::{role::Role, user::UserReturnDto},
+    models::{role::Role, user::UserJwtDto},
     AnyhowResponder,
 };
 use anyhow::anyhow;
@@ -40,6 +40,9 @@ pub enum AuthServiceError {
     #[error("Unable to log in.")]
     #[response(status = 401)]
     LoginError(AnyhowResponder),
+    #[error("Invalid token")]
+    #[response(status = 401)]
+    InvalidJWT(AnyhowResponder),
 }
 
 pub struct AuthService {
@@ -167,9 +170,10 @@ impl AuthService {
                 .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
                 .map(|r| r.token);
             if let Some(ref token) = res {
-                self.redis.set(user.id, token).await.map_err(|e| {
-                        AuthServiceError::InternalError(AnyhowResponder(anyhow!(e)))
-                    })?;
+                self.redis
+                    .set(user.id, token)
+                    .await
+                    .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
             }
         }
 
@@ -188,8 +192,7 @@ impl AuthService {
         .await
         .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
-        self
-            .redis
+        self.redis
             .set(user.id, &token)
             .await
             .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
@@ -197,19 +200,8 @@ impl AuthService {
         Ok(token)
     }
 
-    pub async fn generate_jwt(&mut self, user: &UserModel) -> Result<String, AuthServiceError> {
-        let user_return: UserReturnDto = UserReturnDto {
-            id: user.id,
-            username: user.username.clone(),
-            email: user.email.clone(),
-            role: Role::try_from(user.role).map_err(|_| {
-                AuthServiceError::InternalError(AnyhowResponder(anyhow!(
-                    "Unable to convert `i16` to `Role`"
-                )))
-            })?,
-        };
-
-        let claims = Claims::with_custom_claims(user_return, Duration::from_mins(30));
+    pub async fn generate_jwt(&mut self, user: &UserJwtDto) -> Result<String, AuthServiceError> {
+        let claims = Claims::with_custom_claims(user.clone(), Duration::from_mins(30));
 
         let token = self
             .signing_key
@@ -217,6 +209,26 @@ impl AuthService {
             .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(token)
+    }
+
+    pub fn validate_jwt(
+        &self,
+        jwt: String,
+        tolerance: Option<Duration>,
+    ) -> Result<UserJwtDto, AuthServiceError> {
+        let claims = self
+            .signing_key
+            .public_key()
+            .verify_token::<UserJwtDto>(
+                &jwt,
+                Some(VerificationOptions {
+                    time_tolerance: Some(tolerance.unwrap_or(Duration::new(0, 0))),
+                    ..Default::default()
+                }),
+            )
+            .map_err(|e| AuthServiceError::InvalidJWT(AnyhowResponder(anyhow!(e))))?;
+
+        Ok(claims.custom)
     }
 
     pub async fn revoke_refresh_token(&mut self, user: &UserModel) -> Result<(), AuthServiceError> {
@@ -246,8 +258,18 @@ impl AuthService {
             ))));
         }
 
+        let user_jwt = UserJwtDto {
+            id: user.id,
+            role: Role::try_from(user.role).map_err(|_| {
+                AuthServiceError::InternalError(AnyhowResponder(anyhow!(
+                    "Unable to convert `i64` to `Role`"
+                )))
+            })?,
+            username: user.username.clone(),
+        };
+
         let refresh_token = self.generate_refresh_token(user).await?;
-        let jwt = self.generate_jwt(user).await?;
+        let jwt = self.generate_jwt(&user_jwt).await?;
 
         Ok(LoginReturn { jwt, refresh_token })
     }

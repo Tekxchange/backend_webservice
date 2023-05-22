@@ -2,7 +2,7 @@ use rocket::{response::status::Created, serde::json::Json, Route};
 
 use crate::{
     dtos::auth::LoginReturn,
-    models::user::{UserLogin, UserRegister},
+    models::user::{RefreshAuthUser, UserLogin, UserRegister},
     services::{AuthService, AuthServiceError, UserService, UserServiceError},
 };
 
@@ -32,13 +32,11 @@ async fn login(
 #[post("/refresh")]
 async fn refresh_login(
     mut auth_service: AuthService,
-    user_service: UserService,
-) -> Result<(), AuthServiceError> {
-    let first = user_service.get_user_by_id(&1).await.unwrap().unwrap();
+    auth_user: RefreshAuthUser,
+) -> Result<Json<String>, AuthServiceError> {
+    let jwt = auth_service.generate_jwt(&auth_user.user).await?;
 
-    auth_service.generate_refresh_token(&first).await?;
-
-    Ok(())
+    Ok(Json(jwt))
 }
 
 #[post("/revoke_token")]

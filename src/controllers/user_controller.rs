@@ -1,5 +1,8 @@
 use crate::{
-    models::user::{AuthUser, UserReturnDto},
+    models::{
+        role::Role,
+        user::{AuthUser, UserReturnDto},
+    },
     services::{UserService, UserServiceError},
 };
 use rocket::{serde::json::Json, Route};
@@ -35,15 +38,22 @@ async fn email_exists(
 }
 
 #[get("/user/info")]
-async fn get_user_info(auth_user: AuthUser) -> Json<UserReturnDto> {
+async fn get_user_info(
+    auth_user: AuthUser,
+    user_service: UserService,
+) -> Result<Json<UserReturnDto>, UserServiceError> {
+    let user = user_service
+        .get_user_by_id(&auth_user.user.id)
+        .await?
+        .unwrap();
     let to_return = UserReturnDto {
-        id: auth_user.user.id,
-        email: auth_user.user.email,
-        username: auth_user.user.username,
-        role: auth_user.user.role,
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: Role::try_from(user.role).unwrap(),
     };
 
-    Json(to_return)
+    Ok(Json(to_return))
 }
 
 pub fn routes() -> Vec<Route> {

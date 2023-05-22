@@ -1,10 +1,16 @@
-use chrono::NaiveDateTime;
-use entity::user::Model as UserModel;
-use rocket::request::{self, FromRequest};
-use rocket::Request;
-use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use super::role::Role;
+use crate::services::AuthService;
+use chrono::NaiveDateTime;
+use entity::user::Model as UserModel;
+use rocket::{
+    http::Status,
+    outcome::{try_outcome, Outcome},
+    request::{self, FromRequest},
+    Request,
+};
+use serde::{Deserialize, Serialize};
 
 pub const ADMIN_USERNAME: &str = "admin";
 
@@ -64,23 +70,79 @@ pub struct UserReturnDto {
     pub role: Role,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UserJwtDto {
+    pub id: i64,
+    pub username: String,
+    pub role: Role,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MinUserReturnDto {
     pub id: i64,
     pub username: String,
 }
 
-///
-/// Request guard that will read the JWT from cookies and inject the user into the function
+/// Request guard that will read the JWT from headers and inject the user into the function
 pub struct AuthUser {
-    pub user: User,
+    pub user: UserJwtDto,
 }
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for AuthUser {
     type Error = ();
 
-    async fn from_request(_: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        todo!()
+    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let auth_service: AuthService = try_outcome!(req.guard::<AuthService>().await);
+
+        let jwt = match req.headers().get("auth").next() {
+            Some(j) => j,
+            None => return Outcome::Failure((Status::Unauthorized, ())),
+        };
+
+        let user = match auth_service.validate_jwt(jwt.to_owned(), None) {
+            Ok(user) => user,
+            Err(_) => return Outcome::Failure((Status::Unauthorized, ())),
+        };
+
+        Outcome::Success(AuthUser { user })
+    }
+}
+
+/// Request guard that will read the JWT from headers and inject the user into the function
+/// ## Important
+/// - Only to be used when refreshing jwt
+pub struct RefreshAuthUser {
+    pub user: UserJwtDto,
+    pub refresh_token: String,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for RefreshAuthUser {
+    type Error = ();
+
+    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let auth_service: AuthService = try_outcome!(req.guard::<AuthService>().await);
+
+        let jwt = match req.headers().get("auth").next() {
+            Some(jwt) => jwt,
+            None => return Outcome::Failure((Status::Unauthorized, ())),
+        };
+        let refresh = match req.headers().get("refresh").next() {
+            Some(r) => r,
+            None => return Outcome::Failure((Status::Unauthorized, ())),
+        };
+
+        let user = match auth_service
+            .validate_jwt(jwt.to_owned(), Some(Duration::from_secs(60 * 60).into()))
+        {
+            Ok(user) => user,
+            Err(_) => return Outcome::Failure((Status::Unauthorized, ())),
+        };
+
+        Outcome::Success(RefreshAuthUser {
+            user,
+            refresh_token: refresh.to_owned(),
+        })
     }
 }
