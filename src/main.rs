@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate rocket;
+mod catchers;
 mod controllers;
 mod cors;
 mod db;
@@ -73,4 +74,12 @@ pub async fn rocket() -> _ {
         .attach(Statsd::default())
         .attach(Cors)
         .attach(Options)
+        .register(
+            "/",
+            catchers![
+                catchers::not_found,
+                catchers::unauthorized,
+                catchers::internal_error
+            ],
+        )
 }
