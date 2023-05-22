@@ -4,25 +4,45 @@ mod controllers;
 mod db;
 mod models;
 mod services;
+mod statsd;
+mod guards;
+mod dtos;
 use migration::{Migrator, MigratorTrait};
-use services::UserService;
+use rocket::{response::Responder, Response};
+use serde_json::json;
+use services::{AuthService, UserService};
+use statsd::Statsd;
 use std::env;
 
 use crate::models::user::UserRegister;
 
+#[derive(Debug)]
+pub struct AnyhowResponder(anyhow::Error);
+
+impl<'r> Responder<'r, 'static> for AnyhowResponder {
+    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        let inner_error = self.0.to_string();
+        Response::build_from(json!({ "error": inner_error }).respond_to(request)?).ok()
+    }
+}
+
+impl std::fmt::Display for AnyhowResponder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let self_str = self.0.to_string();
+        write!(f, "{self_str}")
+    }
+}
+
 #[launch]
 pub async fn rocket() -> _ {
     dotenvy::dotenv().ok();
-    let conn = db::establish_connection().await;
-
-    if conn.is_err() {
-        panic!("{conn:?}");
-    }
-    let conn = conn.unwrap();
+    let conn = db::establish_connection().await.unwrap();
+    let redis = db::redis_connection().await.unwrap();
+    let key = AuthService::get_key_pair().unwrap();
 
     Migrator::up(&conn, None).await.unwrap();
 
-    let mut user_service = UserService::new(conn);
+    let user_service = UserService::new(conn.clone());
     let found_admin = user_service
         .username_exists(crate::models::user::ADMIN_USERNAME)
         .await
@@ -45,4 +65,8 @@ pub async fn rocket() -> _ {
     }
 
     controllers::mount_routes(rocket::build())
+        .manage(conn)
+        .manage(redis)
+        .manage(key)
+        .attach(Statsd::default())
 }
