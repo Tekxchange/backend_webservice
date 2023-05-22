@@ -1,23 +1,129 @@
+use std::{
+    fs::OpenOptions,
+    io::{Read, Write},
+};
+
+use anyhow::anyhow;
 use argon2::{
     password_hash::{rand_core::OsRng, SaltString},
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
 };
+use entity::{
+    self,
+    refresh_token::{self, ActiveModel as RefreshActiveModel, Entity as RefreshEntity},
+    user::Model as UserModel,
+};
+use jwt_simple::prelude::*;
+use redis::AsyncCommands;
+use redis::{aio::Connection as RedisConnection, Client as RedisClient};
+use rocket::{
+    futures::TryFutureExt,
+    outcome::{try_outcome, IntoOutcome},
+    request::FromRequest,
+    Request, State,
+};
 use sea_orm::DatabaseConnection;
+use sea_orm::{prelude::*, ActiveValue};
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+use crate::{
+    dtos::auth::LoginReturn,
+    models::{role::Role, user::UserReturnDto},
+    AnyhowResponder,
+};
+
+const KEY_LOCATION: &str = "./auth.key";
+
+#[derive(Error, Debug, Responder)]
 pub enum AuthServiceError {
-    #[error(transparent)]
-    Unknown(anyhow::Error),
+    #[error("An unknown error has occurred")]
+    #[response(status = 500)]
+    InternalError(AnyhowResponder),
+    #[error("Unable to log in.")]
+    #[response(status = 401)]
+    LoginError(AnyhowResponder),
 }
 
 pub struct AuthService {
     db: DatabaseConnection,
+    redis: RedisConnection,
+    signing_key: Ed25519KeyPair,
+}
+
+#[async_trait]
+impl<'r> FromRequest<'r> for AuthService {
+    type Error = ();
+
+    async fn from_request(request: &'r Request<'_>) -> rocket::request::Outcome<Self, Self::Error> {
+        let db: &State<DatabaseConnection> =
+            try_outcome!(request.guard::<&State<DatabaseConnection>>().await);
+
+        let redis: &State<RedisClient> = try_outcome!(request.guard::<&State<RedisClient>>().await);
+        let key: &State<Ed25519KeyPair> =
+            try_outcome!(request.guard::<&State<Ed25519KeyPair>>().await);
+
+        redis
+            .inner()
+            .get_async_connection()
+            .await
+            .ok()
+            .map(|r| Self::new(db.inner().clone(), r, key.inner().clone()))
+            .or_forward(())
+    }
 }
 
 impl AuthService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: DatabaseConnection, redis: RedisConnection, key: Ed25519KeyPair) -> Self {
+        Self {
+            db,
+            redis,
+            signing_key: key,
+        }
+    }
+
+    pub fn get_key_pair() -> Result<Ed25519KeyPair, AuthServiceError> {
+        let save_key = |key: &Ed25519KeyPair| -> Result<(), AuthServiceError> {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(KEY_LOCATION)
+                .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+            file.write(&key.to_bytes())
+                .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+            Ok(())
+        };
+        let key = (|| -> Result<Ed25519KeyPair, AuthServiceError> {
+            match OpenOptions::new().read(true).open(KEY_LOCATION) {
+                Ok(mut file) => {
+                    let file_size = file
+                        .metadata()
+                        .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
+                        .len() as usize;
+
+                    let mut file_buffer = vec![0u8; file_size];
+                    file.read(&mut file_buffer).map_err(|e| {
+                        AuthServiceError::InternalError(AnyhowResponder(anyhow!(e)))
+                    })?;
+
+                    if let Ok(key) = Ed25519KeyPair::from_bytes(&file_buffer) {
+                        Ok(key)
+                    } else {
+                        let key = Ed25519KeyPair::generate();
+                        save_key(&key)?;
+                        Ok(key)
+                    }
+                }
+                Err(_) => {
+                    let key = Ed25519KeyPair::generate();
+                    save_key(&key)?;
+                    Ok(key)
+                }
+            }
+        })()?;
+
+        Ok(key)
     }
 
     pub fn hash_password(password: &str) -> Result<String, AuthServiceError> {
@@ -26,7 +132,7 @@ impl AuthService {
 
         let hashed = argon
             .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| AuthServiceError::Unknown(anyhow::anyhow!(e)))?;
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(hashed.to_string())
     }
@@ -37,11 +143,115 @@ impl AuthService {
     ) -> Result<bool, AuthServiceError> {
         let argon = Argon2::default();
         let hash = PasswordHash::new(encoded_password)
-            .map_err(|e| AuthServiceError::Unknown(anyhow::anyhow!(e)))?;
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         match argon.verify_password(raw_password.as_bytes(), &hash) {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
         }
+    }
+
+    pub async fn generate_refresh_token(
+        &mut self,
+        user: &UserModel,
+    ) -> Result<String, AuthServiceError> {
+        let mut res = self
+            .redis
+            .get::<i64, Option<String>>(user.id)
+            .await
+            .unwrap();
+
+        if let None = res {
+            res = RefreshEntity::find()
+                .filter(refresh_token::Column::UserId.eq(user.id))
+                .one(&self.db)
+                .await
+                .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
+                .map(|r| r.token);
+            if let Some(ref token) = res {
+                let _: () =
+                    self.redis.set(user.id, token).await.map_err(|e| {
+                        AuthServiceError::InternalError(AnyhowResponder(anyhow!(e)))
+                    })?;
+            }
+        }
+
+        if let Some(token) = res {
+            return Ok(token);
+        }
+
+        let token = uuid::Uuid::new_v4().to_string();
+
+        RefreshActiveModel {
+            token: ActiveValue::Set(token.clone()),
+            user_id: ActiveValue::Set(user.id),
+            ..Default::default()
+        }
+        .insert(&self.db)
+        .await
+        .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+        let _: () = self
+            .redis
+            .set(user.id, &token)
+            .await
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+        Ok(token)
+    }
+
+    pub async fn generate_jwt(&mut self, user: &UserModel) -> Result<String, AuthServiceError> {
+        let user_return: UserReturnDto = UserReturnDto {
+            id: user.id,
+            username: user.username.clone(),
+            email: user.email.clone(),
+            role: Role::try_from(user.role).map_err(|_| {
+                AuthServiceError::InternalError(AnyhowResponder(anyhow!(
+                    "Unable to convert `i16` to `Role`"
+                )))
+            })?,
+        };
+
+        let claims = Claims::with_custom_claims(user_return, Duration::from_mins(30));
+
+        let token = self
+            .signing_key
+            .sign(claims)
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+        Ok(token)
+    }
+
+    pub async fn revoke_refresh_token(&mut self, user: &UserModel) -> Result<(), AuthServiceError> {
+        let redis_del = self
+            .redis
+            .del::<i64, ()>(user.id)
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))));
+        let db_del = RefreshEntity::delete_many()
+            .filter(refresh_token::Column::UserId.eq(user.id))
+            .exec(&self.db)
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))));
+
+        match rocket::tokio::try_join!(redis_del, db_del) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn login(
+        &mut self,
+        potential_password: String,
+        user: &UserModel,
+    ) -> Result<LoginReturn, AuthServiceError> {
+        if !Self::verify_password(&user.password, &potential_password)? {
+            return Err(AuthServiceError::LoginError(AnyhowResponder(anyhow!(
+                "Unable to validate password"
+            ))));
+        }
+
+        let refresh_token = self.generate_refresh_token(user).await?;
+        let jwt = self.generate_jwt(user).await?;
+
+        Ok(LoginReturn { jwt, refresh_token })
     }
 }

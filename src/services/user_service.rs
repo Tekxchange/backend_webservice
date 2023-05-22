@@ -3,7 +3,7 @@ use crate::{
         role::Role,
         user::{UserLogin, UserRegister},
     },
-    services::auth_service::AuthService,
+    services::auth_service::AuthService, dtos::auth::LoginReturn,
 };
 use entity::user::{ActiveModel as UserActiveModel, Entity as UserEntity, Model as UserModel};
 use lazy_static::lazy_static;
@@ -19,7 +19,7 @@ use sea_orm::{prelude::*, query::Condition, ActiveValue, DatabaseConnection, Set
 use serde_json::json;
 use thiserror::Error;
 
-use super::auth_service::AuthServiceError;
+use super::auth_service::{self, AuthServiceError};
 
 lazy_static! {
     static ref INVALID_USERNAME_REGEX: Regex =
@@ -135,10 +135,7 @@ impl UserService {
         Ok(found)
     }
 
-    async fn get_by_username(
-        &self,
-        username: &str,
-    ) -> Result<Option<UserModel>, UserServiceError> {
+    async fn get_by_username(&self, username: &str) -> Result<Option<UserModel>, UserServiceError> {
         use entity::user;
         let found = UserEntity::find()
             .filter(Condition::all().add(user::Column::Username.like(username)))
@@ -149,10 +146,7 @@ impl UserService {
         Ok(found)
     }
 
-    pub async fn get_user_by_id(
-        &self,
-        id: &i64,
-    ) -> Result<Option<UserModel>, UserServiceError> {
+    pub async fn get_user_by_id(&self, id: &i64) -> Result<Option<UserModel>, UserServiceError> {
         Ok(UserEntity::find_by_id(*id)
             .one(&self.db_connection)
             .await
@@ -183,7 +177,11 @@ impl UserService {
         return Ok(found_count > 0);
     }
 
-    pub async fn login(&self, login: UserLogin) -> Result<String, UserServiceError> {
+    pub async fn login(
+        &self,
+        login: UserLogin,
+        mut auth_service: AuthService,
+    ) -> Result<LoginReturn, UserServiceError> {
         let mut user: Option<UserModel> = None;
 
         if let Some(ref email) = login.email {
@@ -198,13 +196,12 @@ impl UserService {
 
         let user: UserModel = user.unwrap();
 
-        if !AuthService::verify_password(&user.password, &login.password)
-            .map_err(|e| UserServiceError::AuthServiceError(e))?
-        {
-            return Err(UserServiceError::InvalidPassword);
-        }
+        let login_return = auth_service
+            .login(login.password, &user)
+            .await
+            .map_err(|e| UserServiceError::AuthServiceError(e))?;
 
-        todo!()
+        Ok(login_return)
     }
 
     pub async fn update_role_for_user(

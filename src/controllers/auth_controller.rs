@@ -1,13 +1,9 @@
-use rocket::{
-    http::{Cookie, CookieJar, SameSite},
-    response::status::Created,
-    serde::json::Json,
-    Route,
-};
+use rocket::{response::status::Created, serde::json::Json, Route};
 
 use crate::{
+    dtos::auth::LoginReturn,
     models::user::{UserLogin, UserRegister},
-    services::{UserService, UserServiceError},
+    services::{AuthService, AuthServiceError, UserService, UserServiceError},
 };
 
 #[post("/register", format = "json", data = "<user_register>")]
@@ -25,20 +21,37 @@ async fn register(
 #[post("/login", format = "json", data = "<login>")]
 async fn login(
     user_service: UserService,
+    auth_service: AuthService,
     login: Json<UserLogin>,
-    cookies: &CookieJar<'_>,
-) -> Result<(), UserServiceError> {
-    let token = user_service.login(login.0).await?;
+) -> Result<Json<LoginReturn>, UserServiceError> {
+    let token = user_service.login(login.0, auth_service).await?;
 
-    let token_cookie = Cookie::build("token", token)
-        .same_site(SameSite::Lax)
-        .finish();
+    Ok(Json(token))
+}
 
-    cookies.add(token_cookie);
+#[post("/refresh")]
+async fn refresh_login(
+    mut auth_service: AuthService,
+    user_service: UserService,
+) -> Result<(), AuthServiceError> {
+    let first = user_service.get_user_by_id(&1).await.unwrap().unwrap();
+
+    auth_service.generate_refresh_token(&first).await?;
 
     Ok(())
 }
 
+#[post("/revoke_token")]
+async fn revoke_refresh_token(
+    mut auth_service: AuthService,
+    user_service: UserService,
+) -> Result<(), AuthServiceError> {
+    let first = user_service.get_user_by_id(&1).await.unwrap().unwrap();
+
+    auth_service.revoke_refresh_token(&first).await?;
+    Ok(())
+}
+
 pub fn routes() -> Vec<Route> {
-    routes![register, login]
+    routes![register, login, refresh_login, revoke_refresh_token]
 }
