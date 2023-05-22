@@ -8,7 +8,7 @@ mod guards;
 mod models;
 mod services;
 mod statsd;
-use cors::Cors;
+use cors::{Cors, Options};
 use migration::{Migrator, MigratorTrait};
 use rocket::{response::Responder, Response};
 use serde_json::json;
@@ -72,4 +72,5 @@ pub async fn rocket() -> _ {
         .manage(key)
         .attach(Statsd::default())
         .attach(Cors)
+        .attach(Options)
 }
