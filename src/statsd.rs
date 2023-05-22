@@ -46,6 +46,19 @@ impl Fairing for Statsd {
         let path = request.uri().path().as_str();
         let status = response.status().code;
 
+        let found_count = request
+            .rocket()
+            .routes()
+            .filter(|r| {
+                let p = r.uri.path();
+                return r.method == request.method() && p == path;
+            })
+            .count();
+
+        if found_count < 1 {
+            return;
+        }
+
         let stat = format!("request.{method}.{path}");
 
         let end_time = Utc::now().time();

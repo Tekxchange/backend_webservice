@@ -1,12 +1,14 @@
 #[macro_use]
 extern crate rocket;
 mod controllers;
+mod cors;
 mod db;
+mod dtos;
+mod guards;
 mod models;
 mod services;
 mod statsd;
-mod guards;
-mod dtos;
+use cors::Cors;
 use migration::{Migrator, MigratorTrait};
 use rocket::{response::Responder, Response};
 use serde_json::json;
@@ -69,4 +71,5 @@ pub async fn rocket() -> _ {
         .manage(redis)
         .manage(key)
         .attach(Statsd::default())
+        .attach(Cors)
 }
