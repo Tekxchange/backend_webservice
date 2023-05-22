@@ -58,7 +58,7 @@ impl<'r> FromRequest<'r> for AuthRateLimit {
             Ok(amt) => amt,
             Err(_) => return Outcome::Failure((Status::InternalServerError, ())),
         }
-        .unwrap_or_else(|| 0)
+        .unwrap_or(0)
             + 1;
 
         match conn.set_ex::<&str, i16, ()>(&key, amount, 300).await {

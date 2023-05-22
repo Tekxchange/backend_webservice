@@ -91,7 +91,7 @@ impl ProductService {
         let created = to_create
             .insert(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?;
+            .map_err(ProductServiceError::OrmError)?;
 
         Ok(created.id)
     }
@@ -106,14 +106,14 @@ impl ProductService {
             .filter(Condition::all().add(product::Column::Id.eq(id)))
             .one(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?;
+            .map_err(ProductServiceError::OrmError)?;
 
         if let Some((prod, user)) = found {
-            if let None = user {
+            if user.is_none() {
                 return Err(ProductServiceError::Unknown);
             }
             let user = user.unwrap();
-            return Ok(ProductReturn {
+            Ok(ProductReturn {
                 title: prod.product_title,
                 description: prod.description,
                 price: prod.price,
@@ -121,9 +121,9 @@ impl ProductService {
                     id: user.id,
                     username: user.username,
                 },
-            });
+            })
         } else {
-            return Err(ProductServiceError::NotFound(id));
+            Err(ProductServiceError::NotFound(id))
         }
     }
 
@@ -142,7 +142,7 @@ impl ProductService {
             .filter(Condition::all().add(entity::product::Column::Id.eq(id)))
             .one(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?
+            .map_err(ProductServiceError::OrmError)?
             .ok_or(ProductServiceError::NotFound(id))?
             .into();
 
@@ -162,7 +162,7 @@ impl ProductService {
         new_prod
             .update(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?;
+            .map_err(ProductServiceError::OrmError)?;
 
         Ok(())
     }
@@ -175,7 +175,7 @@ impl ProductService {
         let product: ProductActiveModel = ProductEntity::find_by_id(id)
             .one(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?
+            .map_err(ProductServiceError::OrmError)?
             .ok_or(ProductServiceError::NotFound(id))?
             .into();
 
@@ -186,7 +186,7 @@ impl ProductService {
         product
             .delete(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?;
+            .map_err(ProductServiceError::OrmError)?;
 
         Ok(())
     }

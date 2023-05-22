@@ -21,7 +21,7 @@ impl Default for Statsd {
         let host = std::env::var("STATSD_HOST").expect("Unable to get statsd host from env var");
         let socket = UdpSocket::bind("0.0.0.0:0").expect("Unable to bind a statsd socket");
         let sink = UdpMetricSink::from(host, socket).expect("Unable to create a metrics sink");
-        let client = StatsdClient::from_sink(&format!("tekxchange"), sink);
+        let client = StatsdClient::from_sink("tekxchange", sink);
 
         Self { client }
     }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::role::Role;
 
-pub const ADMIN_USERNAME: &'static str = "admin";
+pub const ADMIN_USERNAME: &str = "admin";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthServiceModel {

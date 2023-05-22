@@ -96,7 +96,7 @@ impl UserService {
             )
             .count(&self.db_connection)
             .await
-            .map_err(|e| UserServiceError::OrmError(e))?;
+            .map_err(UserServiceError::OrmError)?;
 
         if found_users > 0 {
             return Err(UserServiceError::DuplicateUserError);
@@ -107,7 +107,7 @@ impl UserService {
         }
 
         register.password = AuthService::hash_password(&register.password)
-            .map_err(|e| UserServiceError::AuthServiceError(e))?;
+            .map_err(UserServiceError::AuthServiceError)?;
 
         let UserModel { id, .. } = UserActiveModel {
             email: ActiveValue::Set(register.email),
@@ -117,7 +117,7 @@ impl UserService {
         }
         .insert(&self.db_connection)
         .await
-        .map_err(|e| UserServiceError::OrmError(e))?;
+        .map_err(UserServiceError::OrmError)?;
 
         Ok(id)
     }
@@ -128,7 +128,7 @@ impl UserService {
             .filter(Condition::all().add(user::Column::Email.like(email)))
             .one(&self.db_connection)
             .await
-            .map_err(|e| UserServiceError::OrmError(e))?;
+            .map_err(UserServiceError::OrmError)?;
 
         Ok(found)
     }
@@ -139,16 +139,16 @@ impl UserService {
             .filter(Condition::all().add(user::Column::Username.like(username)))
             .one(&self.db_connection)
             .await
-            .map_err(|e| UserServiceError::OrmError(e))?;
+            .map_err(UserServiceError::OrmError)?;
 
         Ok(found)
     }
 
     pub async fn get_user_by_id(&self, id: &i64) -> Result<Option<UserModel>, UserServiceError> {
-        Ok(UserEntity::find_by_id(*id)
+        UserEntity::find_by_id(*id)
             .one(&self.db_connection)
             .await
-            .map_err(|e| UserServiceError::OrmError(e))?)
+            .map_err(UserServiceError::OrmError)
     }
 
     pub async fn username_exists(&self, username: &str) -> Result<bool, UserServiceError> {
@@ -158,9 +158,9 @@ impl UserService {
             .filter(Condition::any().add(user::Column::Username.like(username)))
             .count(&self.db_connection)
             .await
-            .map_err(|e| UserServiceError::OrmError(e))?;
+            .map_err(UserServiceError::OrmError)?;
 
-        return Ok(found_count > 0);
+        Ok(found_count > 0)
     }
 
     pub async fn email_exists(&self, email: &str) -> Result<bool, UserServiceError> {
@@ -170,9 +170,9 @@ impl UserService {
             .filter(Condition::any().add(user::Column::Email.like(email)))
             .count(&self.db_connection)
             .await
-            .map_err(|e| UserServiceError::OrmError(e))?;
+            .map_err(UserServiceError::OrmError)?;
 
-        return Ok(found_count > 0);
+        Ok(found_count > 0)
     }
 
     pub async fn login(
@@ -188,7 +188,7 @@ impl UserService {
             user = self.get_by_username(username).await?;
         }
 
-        if let None = user {
+        if user.is_none() {
             return Err(UserServiceError::UserNotFound);
         }
 
@@ -197,7 +197,7 @@ impl UserService {
         let login_return = auth_service
             .login(login.password, &user)
             .await
-            .map_err(|e| UserServiceError::AuthServiceError(e))?;
+            .map_err(UserServiceError::AuthServiceError)?;
 
         Ok(login_return)
     }
@@ -216,7 +216,7 @@ impl UserService {
         user.role = Set(new_role as i16);
         user.update(&self.db_connection)
             .await
-            .map_err(|e| UserServiceError::OrmError(e))?;
+            .map_err(UserServiceError::OrmError)?;
 
         Ok(())
     }

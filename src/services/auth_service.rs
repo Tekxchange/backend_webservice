@@ -159,7 +159,7 @@ impl AuthService {
             .await
             .unwrap();
 
-        if let None = res {
+        if res.is_none() {
             res = RefreshEntity::find()
                 .filter(refresh_token::Column::UserId.eq(user.id))
                 .one(&self.db)
@@ -167,8 +167,7 @@ impl AuthService {
                 .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
                 .map(|r| r.token);
             if let Some(ref token) = res {
-                let _: () =
-                    self.redis.set(user.id, token).await.map_err(|e| {
+                self.redis.set(user.id, token).await.map_err(|e| {
                         AuthServiceError::InternalError(AnyhowResponder(anyhow!(e)))
                     })?;
             }
@@ -189,7 +188,7 @@ impl AuthService {
         .await
         .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
-        let _: () = self
+        self
             .redis
             .set(user.id, &token)
             .await

@@ -47,5 +47,5 @@ async fn get_user_info(auth_user: AuthUser) -> Json<UserReturnDto> {
 }
 
 pub fn routes() -> Vec<Route> {
-    return routes![username_exists, email_exists, get_user_info];
+    routes![username_exists, email_exists, get_user_info]
 }
