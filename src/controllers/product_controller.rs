@@ -1,15 +1,14 @@
-use rocket::{
-    response::status::{Accepted, Created},
-    serde::json::Json,
-    Route,
-};
-
 use crate::{
     models::{
         product::{ProductDetails, ProductReturn},
         user::AuthUser,
     },
     services::{ProductService, ProductServiceError},
+};
+use rocket::{
+    response::status::{Accepted, Created},
+    serde::json::Json,
+    Route,
 };
 
 #[post("/create", format = "json", data = "<product_create>")]

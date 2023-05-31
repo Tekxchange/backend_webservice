@@ -133,9 +133,10 @@ impl<'r> FromRequest<'r> for RefreshAuthUser {
             None => return Outcome::Failure((Status::Unauthorized, ())),
         };
 
-        let user = match auth_service
-            .validate_jwt(jwt.to_owned(), Some(Duration::from_secs(60 * 60).into()))
-        {
+        let user = match auth_service.validate_jwt(
+            jwt.to_owned(),
+            Some(Duration::from_secs(60 * 60 * 24 * 7).into()),
+        ) {
             Ok(user) => user,
             Err(_) => return Outcome::Failure((Status::Unauthorized, ())),
         };
