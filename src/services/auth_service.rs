@@ -30,6 +30,9 @@ use std::{
 };
 use thiserror::Error;
 
+#[cfg(test)]
+mod test;
+
 const KEY_LOCATION: &str = "./auth.key";
 
 #[derive(Error, Debug, Responder)]
