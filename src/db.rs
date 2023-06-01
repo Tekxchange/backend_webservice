@@ -32,3 +32,17 @@ pub async fn redis_connection() -> anyhow::Result<redis::Client> {
 
     Ok(client)
 }
+
+#[cfg(test)]
+pub mod test {
+    use migration::MigratorTrait;
+    use sea_orm::{Database, DatabaseConnection, DbErr};
+
+    pub async fn establish_connection() -> Result<DatabaseConnection, DbErr> {
+        let db = Database::connect("sqlite::memory:").await?;
+
+        migration::Migrator::up(&db, None).await?;
+
+        Ok(db)
+    }
+}

@@ -1,0 +1,28 @@
+name: Test Webservice
+
+on:
+  push:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test_push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+        with:
+          submodules: recursive
+          ssh-key: ${{ secrets.REPO_SSH_KEY }}
+
+      - uses: actions-rs/toolchain@v1
+        name: Setup Cargo
+        with:
+          toolchain: stable
+
+      - uses: actions-rs/cargo@v1
+        name: Cargo Test
+        with:
+          command: test

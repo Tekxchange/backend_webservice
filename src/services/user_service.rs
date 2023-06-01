@@ -20,10 +20,12 @@ use rocket::{
 use sea_orm::{prelude::*, query::Condition, ActiveValue, DatabaseConnection, Set};
 use serde_json::json;
 use thiserror::Error;
+#[cfg(test)]
+mod test;
 
 lazy_static! {
     static ref INVALID_USERNAME_REGEX: Regex =
-        Regex::new(r"(?i)(admin|moderator|fuck|ass|shit|cunt|piss|wank)").unwrap();
+        Regex::new(r"(?i)(admin|moderator|fuck|ass|shit|cunt|piss|wank|twat)").unwrap();
 }
 
 #[derive(Error, Debug)]
