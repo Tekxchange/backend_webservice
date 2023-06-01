@@ -14,8 +14,11 @@ jobs:
           ssh-key: ${{ secrets.REPO_SSH_KEY }}
 
       - uses: actions-rs/toolchain@v1
+        name: Setup Cargo
         with:
           toolchain: stable
+
       - uses: actions-rs/cargo@v1
+        name: Cargo Test
         with:
           command: test
