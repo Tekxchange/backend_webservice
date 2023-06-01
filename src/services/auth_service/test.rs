@@ -1,7 +1,5 @@
-use crate::{db::test::establish_connection, models::user::UserRegister, services::UserService};
-use sea_orm::prelude::*;
-
 use super::*;
+use crate::{db::test::establish_connection, models::user::UserRegister, services::UserService};
 
 type E = Result<(), Box<dyn std::error::Error>>;
 
@@ -13,7 +11,7 @@ async fn get_test_user(db: DatabaseConnection) -> entity::user::Model {
             UserRegister {
                 username: String::from("JoeDiertay"),
                 email: String::from("my@email.com"),
-                password: String::from("my_p@ssw0rd"),
+                password: String::from("password"),
             },
             false,
         )
@@ -344,6 +342,82 @@ mod validate_jwt {
 
         assert!(res.is_err());
 
+        Ok(())
+    }
+}
+
+mod login {
+    use std::sync::mpsc::channel;
+
+    use mockall::Sequence;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn login_successful_no_redis() -> E {
+        let db = establish_connection().await?;
+        let mut redis = MockRedisRefresh::default();
+        let key = AuthService::get_key_pair()?;
+        let user = get_test_user(db.clone()).await;
+
+        let mut get_seq = Sequence::new();
+
+        let (sx, rx) = channel::<String>();
+
+        redis
+            .expect_get_item()
+            .once()
+            .in_sequence(&mut get_seq)
+            .returning(|_| Ok(None));
+
+        redis
+            .expect_set_item()
+            .returning(move |_, v| {
+                sx.send(v.to_owned()).unwrap();
+                Ok(())
+            })
+            .times(1);
+
+        redis
+            .expect_get_item()
+            .once()
+            .in_sequence(&mut get_seq)
+            .returning(move |_| Ok(Some(rx.recv().unwrap())));
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), key);
+
+        let res = auth_service.login(String::from("password"), &user).await;
+
+        assert!(res.is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn login_successful_with_redis() -> E {
+        let db = establish_connection().await?;
+        let mut redis = MockRedisRefresh::default();
+        let key = AuthService::get_key_pair()?;
+        let user = get_test_user(db.clone()).await;
+
+        let mut get_seq = Sequence::new();
+
+        redis
+            .expect_get_item()
+            .once()
+            .in_sequence(&mut get_seq)
+            .returning(|_| Ok(Some("refresh".into())));
+
+        redis
+            .expect_get_item()
+            .once()
+            .in_sequence(&mut get_seq)
+            .returning(move |_| Ok(Some("refresh".into())));
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), key);
+
+        let res = auth_service.login("password".into(), &user).await;
+
+        assert!(res.is_ok());
         Ok(())
     }
 }

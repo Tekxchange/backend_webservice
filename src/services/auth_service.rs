@@ -14,7 +14,6 @@ use entity::{
     user::Model as UserModel,
 };
 use jwt_simple::prelude::*;
-use mockall::automock;
 use redis::AsyncCommands;
 use redis::{aio::Connection as RedisConnection, Client as RedisClient};
 use rocket::{
@@ -331,7 +330,7 @@ impl AuthService {
     }
 }
 
-#[automock]
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait RedisRefresh: Send {
     async fn get_item(
