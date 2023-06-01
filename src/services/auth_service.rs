@@ -27,6 +27,7 @@ use sea_orm::{prelude::*, ActiveValue};
 use std::{
     fs::OpenOptions,
     io::{Read, Write},
+    time::Duration,
 };
 use thiserror::Error;
 
@@ -235,8 +236,14 @@ impl AuthService {
         &mut self,
         user: &UserJwtDto,
         refresh: &str,
+        validity: Option<std::time::Duration>,
     ) -> Result<String, AuthServiceError> {
-        let claims = Claims::with_custom_claims(user.clone(), Duration::from_mins(30));
+        let claims = Claims::with_custom_claims(
+            user.clone(),
+            validity
+                .unwrap_or_else(|| Duration::from_secs(60 * 60 * 24 * 7))
+                .into(),
+        );
 
         let stored_refresh = self.validate_refresh_token(user.id).await?;
         if let None = stored_refresh {
@@ -270,7 +277,7 @@ impl AuthService {
             .verify_token::<UserJwtDto>(
                 &jwt,
                 Some(VerificationOptions {
-                    time_tolerance: Some(tolerance.unwrap_or(Duration::new(0, 0))),
+                    time_tolerance: Some(tolerance.unwrap_or(Duration::new(0, 0)).into()),
                     ..Default::default()
                 }),
             )
@@ -318,7 +325,7 @@ impl AuthService {
         };
 
         let refresh_token = self.generate_refresh_token(user).await?;
-        let jwt = self.generate_jwt(&user_jwt, &refresh_token).await?;
+        let jwt = self.generate_jwt(&user_jwt, &refresh_token, None).await?;
 
         Ok(LoginReturn { jwt, refresh_token })
     }

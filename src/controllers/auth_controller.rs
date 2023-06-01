@@ -35,7 +35,7 @@ async fn refresh_login(
     auth_user: RefreshAuthUser,
 ) -> Result<Json<String>, AuthServiceError> {
     let jwt = auth_service
-        .generate_jwt(&auth_user.user, &auth_user.refresh_token)
+        .generate_jwt(&auth_user.user, &auth_user.refresh_token, None)
         .await?;
 
     Ok(Json(jwt))

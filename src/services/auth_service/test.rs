@@ -201,6 +201,7 @@ mod generate_jwt {
                     role: Role::User,
                 },
                 &refresh_token,
+                None,
             )
             .await;
         assert!(jwt.is_ok());
@@ -225,10 +226,123 @@ mod generate_jwt {
                     role: Role::User,
                 },
                 "refresh",
+                None,
             )
             .await;
 
         assert!(found.is_err());
+
+        Ok(())
+    }
+}
+
+mod validate_jwt {
+    use super::*;
+
+    #[tokio::test]
+    async fn successful_not_expired() -> E {
+        let refresh = String::from("refresh");
+        let mut redis = MockRedisRefresh::default();
+        let db = establish_connection().await?;
+        let s = refresh.to_owned();
+        redis
+            .expect_get_item()
+            .returning(move |_| Ok(Some(s.to_owned())))
+            .times(1);
+        let user = get_test_user(db.clone()).await;
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), AuthService::get_key_pair()?);
+        let token = auth_service
+            .generate_jwt(
+                &UserJwtDto {
+                    id: user.id,
+                    username: user.username,
+                    role: Role::User,
+                },
+                &refresh,
+                None,
+            )
+            .await?;
+
+        let res = auth_service.validate_jwt(token, None);
+        assert!(res.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unsuccessful_expired() -> E {
+        let refresh = String::from("refresh");
+        let mut redis = MockRedisRefresh::default();
+        let db = establish_connection().await?;
+        let s = refresh.to_owned();
+        redis
+            .expect_get_item()
+            .returning(move |_| Ok(Some(s.to_owned())))
+            .times(1);
+        let user = get_test_user(db.clone()).await;
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), AuthService::get_key_pair()?);
+        let token = auth_service
+            .generate_jwt(
+                &UserJwtDto {
+                    id: user.id,
+                    username: user.username,
+                    role: Role::User,
+                },
+                &refresh,
+                Some(Duration::from_secs(0)),
+            )
+            .await?;
+
+        let res = auth_service.validate_jwt(token, None);
+
+        assert!(res.is_err());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn successful_with_tolerance() -> E {
+        let refresh = String::from("refresh");
+        let mut redis = MockRedisRefresh::default();
+        let db = establish_connection().await?;
+        let s = refresh.to_owned();
+        redis
+            .expect_get_item()
+            .returning(move |_| Ok(Some(s.to_owned())))
+            .times(1);
+        let user = get_test_user(db.clone()).await;
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), AuthService::get_key_pair()?);
+        let token = auth_service
+            .generate_jwt(
+                &UserJwtDto {
+                    id: user.id,
+                    username: user.username,
+                    role: Role::User,
+                },
+                &refresh,
+                Some(Duration::from_secs(0)),
+            )
+            .await?;
+
+        let res = auth_service.validate_jwt(token, Some(Duration::from_secs(10)));
+
+        assert!(res.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unsuccessful_invalid() -> E {
+        let redis = MockRedisRefresh::default();
+        let db = establish_connection().await?;
+        let auth_service = AuthService::new(db, Box::new(redis), AuthService::get_key_pair()?);
+
+        let res = auth_service.validate_jwt(String::from("testing"), Some(Duration::from_secs(10)));
+
+        assert!(res.is_err());
 
         Ok(())
     }
