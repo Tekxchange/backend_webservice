@@ -1,4 +1,5 @@
 use crate::{db::test::establish_connection, models::user::UserRegister, services::UserService};
+use sea_orm::prelude::*;
 
 use super::*;
 
@@ -105,6 +106,129 @@ mod validate_refresh_token {
     #[tokio::test]
     async fn has_redis_entry() -> E {
         let db = establish_connection().await?;
+        let test_user = get_test_user(db.clone()).await;
+        let mut redis = MockRedisRefresh::default();
+
+        redis
+            .expect_get_item()
+            .returning(|_| Ok(Some(String::from("refresh_token"))))
+            .times(1);
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), AuthService::get_key_pair()?);
+
+        let res = auth_service.validate_refresh_token(test_user.id).await?;
+
+        assert!(res.is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn has_no_redis_entry() -> E {
+        let db = establish_connection().await?;
+        let db_token = String::from("refresh_token");
+
+        let test_user = get_test_user(db.clone()).await;
+        entity::refresh_token::ActiveModel {
+            token: ActiveValue::Set(db_token.to_owned()),
+            user_id: ActiveValue::Set(test_user.id),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+        let mut redis = MockRedisRefresh::default();
+
+        redis.expect_get_item().returning(|_| Ok(None)).times(1);
+        redis
+            .expect_set_item()
+            .returning(move |_, value| {
+                assert_eq!(&db_token, value);
+                Ok(())
+            })
+            .times(1);
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), AuthService::get_key_pair()?);
+
+        let res = auth_service.validate_refresh_token(test_user.id).await?;
+
+        assert!(res.is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn has_no_entry() -> E {
+        let db = establish_connection().await?;
+        let mut redis = MockRedisRefresh::default();
+        let key = AuthService::get_key_pair()?;
+        let test_user = get_test_user(db.clone()).await;
+
+        redis.expect_get_item().returning(|_| Ok(None)).times(1);
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), key);
+        let found = auth_service.validate_refresh_token(test_user.id).await?;
+
+        assert!(found.is_none());
+
+        Ok(())
+    }
+}
+
+mod generate_jwt {
+    use super::*;
+
+    #[tokio::test]
+    async fn successful_generation() -> E {
+        let refresh_token = String::from("refresh");
+        let db = establish_connection().await?;
+        let mut redis = MockRedisRefresh::default();
+
+        let s = refresh_token.to_owned();
+        redis
+            .expect_get_item()
+            .returning(move |_| Ok(Some(s.clone())))
+            .times(1);
+
+        let key = AuthService::get_key_pair()?;
+        let test_user = get_test_user(db.clone()).await;
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), key);
+        let jwt = auth_service
+            .generate_jwt(
+                &UserJwtDto {
+                    id: test_user.id,
+                    username: test_user.username,
+                    role: Role::User,
+                },
+                &refresh_token,
+            )
+            .await;
+        assert!(jwt.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unsuccessful_generation_no_refresh_token() -> E {
+        let db = establish_connection().await?;
+        let mut redis = MockRedisRefresh::default();
+        let user = get_test_user(db.clone()).await;
+
+        redis.expect_get_item().returning(|_| Ok(None)).times(1);
+
+        let mut auth_service = AuthService::new(db, Box::new(redis), AuthService::get_key_pair()?);
+        let found = auth_service
+            .generate_jwt(
+                &UserJwtDto {
+                    id: user.id,
+                    username: user.username,
+                    role: Role::User,
+                },
+                "refresh",
+            )
+            .await;
+
+        assert!(found.is_err());
 
         Ok(())
     }
