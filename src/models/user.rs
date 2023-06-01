@@ -48,7 +48,7 @@ impl TryFrom<UserModel> for User {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserRegister {
     pub username: String,
     pub email: String,
