@@ -15,6 +15,8 @@ use sea_orm::{
 };
 use serde_json::json;
 use thiserror::Error;
+#[cfg(test)]
+mod test;
 
 #[derive(Error, Debug)]
 pub enum ProductServiceError {
@@ -70,7 +72,7 @@ impl ProductService {
     }
 
     pub async fn create_new_product(
-        &mut self,
+        &self,
         create: ProductDetails,
         creating_user: AuthUser,
     ) -> Result<i64, ProductServiceError> {
@@ -97,7 +99,7 @@ impl ProductService {
     }
 
     pub async fn get_product_by_id(
-        &mut self,
+        &self,
         id: i64,
     ) -> Result<ProductReturn, ProductServiceError> {
         use entity::product;
@@ -128,7 +130,7 @@ impl ProductService {
     }
 
     pub async fn update_product_by_id(
-        &mut self,
+        &self,
         id: i64,
         product: ProductDetails,
         user: AuthUser,
@@ -168,7 +170,7 @@ impl ProductService {
     }
 
     pub async fn delete_product_by_id(
-        &mut self,
+        &self,
         id: i64,
         user: AuthUser,
     ) -> Result<(), ProductServiceError> {

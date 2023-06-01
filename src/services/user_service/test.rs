@@ -1,4 +1,4 @@
-pub use super::UserService;
+use super::UserService;
 use crate::{db::test::establish_connection, models::user::UserRegister};
 use sea_orm::prelude::*;
 

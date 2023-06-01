@@ -13,7 +13,7 @@ use rocket::{
 
 #[post("/create", format = "json", data = "<product_create>")]
 async fn create_product(
-    mut product_service: ProductService,
+    product_service: ProductService,
     product_create: Json<ProductDetails>,
     auth_user: AuthUser,
 ) -> Result<Created<()>, ProductServiceError> {
@@ -26,7 +26,7 @@ async fn create_product(
 
 #[get("/product?<id>")]
 async fn get_product_by_id(
-    mut product_service: ProductService,
+    product_service: ProductService,
     id: i64,
 ) -> Result<Json<ProductReturn>, ProductServiceError> {
     let found_product = product_service.get_product_by_id(id).await?;
@@ -36,7 +36,7 @@ async fn get_product_by_id(
 
 #[put("/product?<id>", format = "json", data = "<product>")]
 async fn update_product_by_id(
-    mut product_service: ProductService,
+    product_service: ProductService,
     id: i64,
     user: AuthUser,
     product: Json<ProductDetails>,
@@ -49,7 +49,7 @@ async fn update_product_by_id(
 
 #[delete("/product?<id>")]
 async fn delete_product_by_id(
-    mut product_service: ProductService,
+    product_service: ProductService,
     id: i64,
     user: AuthUser,
 ) -> Result<(), ProductServiceError> {
