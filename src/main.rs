@@ -9,7 +9,6 @@ mod guards;
 mod models;
 mod services;
 mod statsd;
-mod redis;
 use cors::{Cors, Options};
 use migration::{Migrator, MigratorTrait};
 use rocket::{response::Responder, Response};

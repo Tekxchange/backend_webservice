@@ -14,10 +14,10 @@ use entity::{
     user::Model as UserModel,
 };
 use jwt_simple::prelude::*;
+use mockall::automock;
 use redis::AsyncCommands;
 use redis::{aio::Connection as RedisConnection, Client as RedisClient};
 use rocket::{
-    futures::TryFutureExt,
     outcome::{try_outcome, IntoOutcome},
     request::FromRequest,
     Request, State,
@@ -53,7 +53,7 @@ pub enum AuthServiceError {
 
 pub struct AuthService {
     db: DatabaseConnection,
-    redis: RedisConnection,
+    redis: Box<dyn RedisRefresh>,
     signing_key: Ed25519KeyPair,
 }
 
@@ -74,13 +74,13 @@ impl<'r> FromRequest<'r> for AuthService {
             .get_async_connection()
             .await
             .ok()
-            .map(|r| Self::new(db.inner().clone(), r, key.inner().clone()))
+            .map(|r| Self::new(db.inner().clone(), Box::new(r), key.inner().clone()))
             .or_forward(())
     }
 }
 
 impl AuthService {
-    pub fn new(db: DatabaseConnection, redis: RedisConnection, key: Ed25519KeyPair) -> Self {
+    pub fn new(db: DatabaseConnection, redis: Box<dyn RedisRefresh>, key: Ed25519KeyPair) -> Self {
         Self {
             db,
             redis,
@@ -162,11 +162,7 @@ impl AuthService {
         &mut self,
         user: &UserModel,
     ) -> Result<String, AuthServiceError> {
-        let mut res = self
-            .redis
-            .get::<i64, Option<String>>(user.id)
-            .await
-            .unwrap();
+        let mut res = self.redis.get_item(&user.id.to_string()).await.unwrap();
 
         if res.is_none() {
             res = RefreshEntity::find()
@@ -177,7 +173,7 @@ impl AuthService {
                 .map(|r| r.token);
             if let Some(ref token) = res {
                 self.redis
-                    .set(user.id, token)
+                    .set_item(&user.id.to_string(), token)
                     .await
                     .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
             }
@@ -199,7 +195,7 @@ impl AuthService {
         .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         self.redis
-            .set(user.id, &token)
+            .set_item(&user.id.to_string(), &token)
             .await
             .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
@@ -212,7 +208,7 @@ impl AuthService {
     ) -> Result<Option<String>, AuthServiceError> {
         let mut found = self
             .redis
-            .get::<i64, Option<String>>(user_id)
+            .get_item(&user_id.to_string())
             .await
             .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
@@ -226,7 +222,7 @@ impl AuthService {
 
             if let Some(ref token) = found {
                 self.redis
-                    .set::<i64, &str, ()>(user_id, token)
+                    .set_item(&user_id.to_string(), token)
                     .await
                     .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
             }
@@ -284,19 +280,20 @@ impl AuthService {
     }
 
     pub async fn revoke_refresh_token(&mut self, user: &UserModel) -> Result<(), AuthServiceError> {
-        let redis_del = self
-            .redis
-            .del::<i64, ()>(user.id)
-            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))));
-        let db_del = RefreshEntity::delete_many()
+        let user_id_str = user.id.to_string();
+
+        self.redis
+            .delete_item(&user_id_str)
+            .await
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+        RefreshEntity::delete_many()
             .filter(refresh_token::Column::UserId.eq(user.id))
             .exec(&self.db)
-            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))));
+            .await
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
-        match rocket::tokio::try_join!(redis_del, db_del) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }
+        Ok(())
     }
 
     pub async fn login(
@@ -324,5 +321,52 @@ impl AuthService {
         let jwt = self.generate_jwt(&user_jwt, &refresh_token).await?;
 
         Ok(LoginReturn { jwt, refresh_token })
+    }
+}
+
+#[automock]
+#[async_trait]
+pub trait RedisRefresh: Send {
+    async fn get_item(
+        &mut self,
+        key: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn set_item(
+        &mut self,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn delete_item(
+        &mut self,
+        key: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+
+#[async_trait]
+impl RedisRefresh for RedisConnection {
+    async fn get_item(
+        &mut self,
+        key: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.get::<&str, Option<String>>(key).await?)
+    }
+
+    async fn set_item(
+        &mut self,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.set::<&str, &str, ()>(key, value).await?;
+        Ok(())
+    }
+
+    async fn delete_item(
+        &mut self,
+        key: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.del::<&str, ()>(key).await?;
+        Ok(())
     }
 }
