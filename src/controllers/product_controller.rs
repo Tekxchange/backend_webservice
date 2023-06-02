@@ -1,6 +1,7 @@
 use crate::{
+    dtos::product::ProductFilter,
     models::{
-        product::{ProductDetails, ProductReturn},
+        product::{ProductDetails, ProductLocationReturn, ProductReturn},
         user::AuthUser,
     },
     services::{ProductService, ProductServiceError},
@@ -58,11 +59,22 @@ async fn delete_product_by_id(
     Ok(())
 }
 
+#[post("/search", data = "<filter>")]
+async fn search_for_products(
+    filter: Json<ProductFilter>,
+    product_service: ProductService,
+) -> Result<Json<Vec<ProductLocationReturn>>, ProductServiceError> {
+    let found_products = product_service.search_for_products(filter.0).await?;
+
+    Ok(Json(found_products))
+}
+
 pub fn routes() -> Vec<Route> {
     routes![
         create_product,
         get_product_by_id,
         update_product_by_id,
-        delete_product_by_id
+        delete_product_by_id,
+        search_for_products
     ]
 }

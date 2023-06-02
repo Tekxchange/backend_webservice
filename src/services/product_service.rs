@@ -1,8 +1,11 @@
-use crate::models::{
-    product::{ProductDetails, ProductReturn},
-    user::{AuthUser, MinUserReturnDto},
+use crate::{
+    dtos::product::ProductFilter,
+    models::{
+        product::{ProductDetails, ProductLocationReturn, ProductReturn},
+        user::{AuthUser, MinUserReturnDto},
+    },
 };
-use entity::product::{ActiveModel as ProductActiveModel, Entity as ProductEntity};
+use entity::product::{self, ActiveModel as ProductActiveModel, Entity as ProductEntity};
 use rocket::{
     http::Status,
     outcome::IntoOutcome,
@@ -10,8 +13,10 @@ use rocket::{
     response::Responder,
     Request, Response,
 };
+use rust_decimal::prelude::*;
 use sea_orm::{
     entity::prelude::*, query::Condition, ActiveModelTrait, ActiveValue, DatabaseConnection,
+    QueryOrder, QuerySelect,
 };
 use serde_json::json;
 use thiserror::Error;
@@ -98,11 +103,7 @@ impl ProductService {
         Ok(created.id)
     }
 
-    pub async fn get_product_by_id(
-        &self,
-        id: i64,
-    ) -> Result<ProductReturn, ProductServiceError> {
-        use entity::product;
+    pub async fn get_product_by_id(&self, id: i64) -> Result<ProductReturn, ProductServiceError> {
         let found = ProductEntity::find()
             .find_also_related(entity::user::Entity)
             .filter(Condition::all().add(product::Column::Id.eq(id)))
@@ -123,6 +124,8 @@ impl ProductService {
                     id: user.id,
                     username: user.username,
                 },
+                latitude: prod.location_latitude,
+                longitude: prod.location_longitude,
             })
         } else {
             Err(ProductServiceError::NotFound(id))
@@ -191,5 +194,78 @@ impl ProductService {
             .map_err(ProductServiceError::OrmError)?;
 
         Ok(())
+    }
+
+    pub async fn search_for_products(
+        &self,
+        filter: ProductFilter,
+    ) -> Result<Vec<ProductLocationReturn>, ProductServiceError> {
+        let bounds = geolocation_utils::CoordinateBoundaries::new(
+            filter.coordinate,
+            filter.radius.to_f64().unwrap(),
+            filter.units,
+        )
+        .ok_or_else(|| ProductServiceError::Unknown)?;
+
+        let mut found = ProductEntity::find().filter(
+            Condition::all()
+                .add(product::Column::LocationLatitude.gte(bounds.min_latitude()))
+                .add(product::Column::LocationLatitude.lte(bounds.max_latitude()))
+                .add(product::Column::LocationLongitude.gte(bounds.min_longitude()))
+                .add(product::Column::LocationLongitude.lte(bounds.max_longitude())),
+        );
+
+        if let Some(high) = filter.price_high {
+            found = found.filter(product::Column::Price.lte(high));
+        }
+        if let Some(low) = filter.price_low {
+            found = found.filter(product::Column::Price.gte(low));
+        }
+        if let Some(query) = filter.query {
+            found = found.filter(product::Column::ProductTitle.like(&query));
+        }
+        if let Some(zip) = filter.zip {
+            found = found.filter(product::Column::LocationZip.like(&zip));
+        }
+        if let Some(city) = filter.city {
+            found = found.filter(product::Column::LocationCity.like(&city));
+        }
+        if let Some(id_lower) = filter.product_id_lower {
+            found = found.filter(product::Column::Id.gte(id_lower));
+        }
+
+        let found = found
+            .find_also_related(entity::user::Entity)
+            .limit(25)
+            .order_by(product::Column::Id, sea_orm::Order::Desc)
+            .all(&self.db_connection)
+            .await
+            .map_err(ProductServiceError::OrmError)?;
+
+        Ok(found
+            .into_iter()
+            .map(|(prod, user)| {
+                if user.is_none()
+                    || prod.location_latitude.is_none()
+                    || prod.location_longitude.is_none()
+                {
+                    return None;
+                }
+                let user = user.unwrap();
+                Some(ProductLocationReturn {
+                    description: prod.description,
+                    price: prod.price,
+                    title: prod.product_title,
+                    latitude: prod.location_latitude.unwrap(),
+                    longitude: prod.location_longitude.unwrap(),
+                    created_by: MinUserReturnDto {
+                        id: user.id,
+                        username: user.username,
+                    },
+                })
+            })
+            .filter(|item| item.is_some())
+            .map(|item| item.unwrap())
+            .collect())
     }
 }
