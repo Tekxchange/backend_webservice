@@ -79,7 +79,8 @@ pub async fn rocket() -> _ {
             catchers![
                 catchers::not_found,
                 catchers::unauthorized,
-                catchers::internal_error
+                catchers::internal_error,
+                catchers::unprocessable
             ],
         )
 }

@@ -26,3 +26,10 @@ pub fn not_found() -> Json<ErrorResponse> {
         error: "The requested resource is not found".into(),
     })
 }
+
+#[catch(422)]
+pub fn unprocessable() -> Json<ErrorResponse> {
+    Json(ErrorResponse {
+        error: "Request is malformed, unable to process".into(),
+    })
+}

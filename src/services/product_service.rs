@@ -104,18 +104,19 @@ impl ProductService {
     }
 
     pub async fn get_product_by_id(&self, id: i64) -> Result<ProductReturn, ProductServiceError> {
-        let found = ProductEntity::find()
+        let found = ProductEntity::find_by_id(id)
             .find_also_related(entity::user::Entity)
-            .filter(Condition::all().add(product::Column::Id.eq(id)))
             .one(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?;
+            .map_err(|e| ProductServiceError::OrmError(e))?;
 
-        if let Some((prod, user)) = found {
-            if user.is_none() {
-                return Err(ProductServiceError::Unknown);
-            }
-            let user = user.unwrap();
+        if let Some((prod, Some(user))) = found {
+            let pics = entity::product_picture::Entity::find()
+                .filter(entity::product_picture::Column::ProductId.eq(prod.id))
+                .all(&self.db_connection)
+                .await
+                .map_err(|e| ProductServiceError::OrmError(e))?;
+
             Ok(ProductReturn {
                 title: prod.product_title,
                 description: prod.description,
@@ -126,6 +127,7 @@ impl ProductService {
                 },
                 latitude: prod.location_latitude,
                 longitude: prod.location_longitude,
+                pictures: pics.into_iter().map(|i| i.id).collect(),
             })
         } else {
             Err(ProductServiceError::NotFound(id))
@@ -235,7 +237,6 @@ impl ProductService {
         }
 
         let found = found
-            .find_also_related(entity::user::Entity)
             .limit(25)
             .order_by(product::Column::Id, sea_orm::Order::Desc)
             .all(&self.db_connection)
@@ -244,24 +245,11 @@ impl ProductService {
 
         Ok(found
             .into_iter()
-            .map(|(prod, user)| {
-                if user.is_none()
-                    || prod.location_latitude.is_none()
-                    || prod.location_longitude.is_none()
-                {
-                    return None;
-                }
-                let user = user.unwrap();
+            .map(|prod| {
                 Some(ProductLocationReturn {
-                    description: prod.description,
-                    price: prod.price,
-                    title: prod.product_title,
                     latitude: prod.location_latitude.unwrap(),
                     longitude: prod.location_longitude.unwrap(),
-                    created_by: MinUserReturnDto {
-                        id: user.id,
-                        username: user.username,
-                    },
+                    id: prod.id,
                 })
             })
             .filter(|item| item.is_some())
