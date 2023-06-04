@@ -1,5 +1,5 @@
 use crate::models::{
-    product::ProductDetails,
+    product::{ProductDetails, ProductReturn},
     role::Role,
     user::{AuthUser, UserJwtDto},
 };
@@ -9,7 +9,8 @@ use crate::{
     services::{ProductService, UserService},
 };
 use entity::user::Model as UserModel;
-use rust_decimal::Decimal;
+use geolocation_utils::Coordinate;
+use rust_decimal::{prelude::FromPrimitive, Decimal};
 use sea_orm::DatabaseConnection;
 
 type E = Result<(), Box<dyn std::error::Error>>;
@@ -32,29 +33,36 @@ async fn create_test_user(db: DatabaseConnection, username: &str) -> UserModel {
     user
 }
 
-async fn create_test_product(ps: &ProductService, user: UserModel) -> i64 {
-    ps.create_new_product(
-        ProductDetails {
-            description: "description".into(),
-            title: "title".into(),
-            price: Decimal::new(5, 15),
-            country: "country".into(),
-            state: "state".into(),
-            city: "city".into(),
-            zip: "zip".into(),
-            latitude: Some(Decimal::new(13, 0)),
-            longitude: Some(Decimal::new(12, 0)),
-        },
-        AuthUser {
-            user: UserJwtDto {
-                id: user.id,
-                username: user.username,
-                role: Role::try_from(user.role).unwrap(),
+async fn create_test_product(
+    ps: &ProductService,
+    user: UserModel,
+    coords: Coordinate,
+) -> ProductReturn {
+    let id = ps
+        .create_new_product(
+            ProductDetails {
+                description: "description".into(),
+                title: "title".into(),
+                price: Decimal::new(5, 15),
+                country: "country".into(),
+                state: "state".into(),
+                city: "city".into(),
+                zip: "zip".into(),
+                latitude: Some(Decimal::from_f64(coords.latitude).unwrap()),
+                longitude: Some(Decimal::from_f64(coords.longitude).unwrap()),
             },
-        },
-    )
-    .await
-    .unwrap()
+            AuthUser {
+                user: UserJwtDto {
+                    id: user.id,
+                    username: user.username,
+                    role: Role::try_from(user.role).unwrap(),
+                },
+            },
+        )
+        .await
+        .unwrap();
+
+    ps.get_product_by_id(id).await.unwrap()
 }
 
 mod create_new_product {
@@ -123,6 +131,44 @@ mod create_new_product {
             .await;
 
         assert!(res.is_err());
+
+        Ok(())
+    }
+}
+
+mod search_for_products {
+    use crate::dtos::product::ProductFilter;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn gets_products_at_location_and_radius() -> E {
+        let db = establish_connection().await?;
+        let user = create_test_user(db.clone(), "testUser").await;
+        let product_service = ProductService::new(db);
+        create_test_product(
+            &product_service,
+            user.clone(),
+            Coordinate::new(1.0, 1.2500025),
+        )
+        .await;
+
+        create_test_product(&product_service, user, Coordinate::new(1.0, 1.25)).await;
+
+        let found = product_service
+            .search_for_products(ProductFilter {
+                city: None,
+                query: None,
+                zip: None,
+                coordinate: Coordinate::new(1.0, 1.250003),
+                price_high: None,
+                price_low: None,
+                product_id_lower: None,
+                radius: Decimal::from_f64(1.0).unwrap(),
+                units: None,
+            })
+            .await?;
+        assert_eq!(found.len(), 2);
 
         Ok(())
     }
