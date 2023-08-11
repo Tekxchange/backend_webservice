@@ -1,4 +1,5 @@
 use crate::{
+    db::RedisRefresh,
     dtos::auth::LoginReturn,
     models::{role::Role, user::UserJwtDto},
     AnyhowResponder,
@@ -14,8 +15,7 @@ use entity::{
     user::Model as UserModel,
 };
 use jwt_simple::prelude::*;
-use redis::AsyncCommands;
-use redis::{aio::Connection as RedisConnection, Client as RedisClient};
+use redis::Client as RedisClient;
 use rocket::{
     outcome::{try_outcome, IntoOutcome},
     request::FromRequest,
@@ -327,52 +327,5 @@ impl AuthService {
         let jwt = self.generate_jwt(&user_jwt, &refresh_token, None).await?;
 
         Ok(LoginReturn { jwt, refresh_token })
-    }
-}
-
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait RedisRefresh: Send {
-    async fn get_item(
-        &mut self,
-        key: &str,
-    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>>;
-
-    async fn set_item(
-        &mut self,
-        key: &str,
-        value: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-
-    async fn delete_item(
-        &mut self,
-        key: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-}
-
-#[async_trait]
-impl RedisRefresh for RedisConnection {
-    async fn get_item(
-        &mut self,
-        key: &str,
-    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.get::<&str, Option<String>>(key).await?)
-    }
-
-    async fn set_item(
-        &mut self,
-        key: &str,
-        value: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.set::<&str, &str, ()>(key, value).await?;
-        Ok(())
-    }
-
-    async fn delete_item(
-        &mut self,
-        key: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.del::<&str, ()>(key).await?;
-        Ok(())
     }
 }

@@ -1,7 +1,55 @@
+use redis::{aio::Connection as RedisConnection, AsyncCommands};
 use rocket::{http::Status, response::Responder, Response};
 use sea_orm::{Database, DatabaseConnection, DbErr};
 use std::env;
 use thiserror::Error;
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait RedisRefresh: Send {
+    async fn get_item(
+        &mut self,
+        key: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn set_item(
+        &mut self,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn delete_item(
+        &mut self,
+        key: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+
+#[async_trait]
+impl RedisRefresh for RedisConnection {
+    async fn get_item(
+        &mut self,
+        key: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.get::<&str, Option<String>>(key).await?)
+    }
+
+    async fn set_item(
+        &mut self,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.set::<&str, &str, ()>(key, value).await?;
+        Ok(())
+    }
+
+    async fn delete_item(
+        &mut self,
+        key: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.del::<&str, ()>(key).await?;
+        Ok(())
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum DbError {
