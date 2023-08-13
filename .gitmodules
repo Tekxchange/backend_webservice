@@ -1,8 +1,0 @@
-[submodule "tekxchange-entities"]
-	path = tekxchange-entities
-	url = git@github.com:Tekxchange/db_entities.git
-	branch = master
-[submodule "tekxchange-migrations"]
-	path = tekxchange-migrations
-	url = git@github.com:Tekxchange/db_migrations.git
-	branch = master
