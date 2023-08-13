@@ -85,6 +85,7 @@ pub async fn rocket() -> _ {
         )
 }
 
+#[cfg(test)]
 use sea_orm::DatabaseConnection;
 #[cfg(test)]
 pub async fn create_rocket_instance(
