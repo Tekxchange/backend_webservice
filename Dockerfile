@@ -4,7 +4,7 @@ WORKDIR /usr/src/app
 
 COPY . .
 
-RUN apk add libc6-compat libssl1.1 openssl-dev libgcc gcompat musl-dev
+RUN apk add libc6-compat libressl-dev libgcc gcompat musl-dev
 RUN cargo build --release
 
 FROM alpine:latest as RUNNER
