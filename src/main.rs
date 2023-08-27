@@ -84,3 +84,29 @@ pub async fn rocket() -> _ {
             ],
         )
 }
+
+#[cfg(test)]
+use sea_orm::DatabaseConnection;
+#[cfg(test)]
+pub async fn create_rocket_instance(
+    memory_conn: Option<DatabaseConnection>,
+) -> anyhow::Result<rocket::Rocket<rocket::Build>> {
+    use db::test::establish_connection;
+    let key = AuthService::get_key_pair()?;
+
+    let memory_conn = memory_conn.unwrap_or(establish_connection().await?);
+    Ok(controllers::mount_routes(rocket::build())
+        .manage(memory_conn)
+        .manage(key)
+        .attach(Cors)
+        .attach(Options)
+        .register(
+            "/",
+            catchers![
+                catchers::not_found,
+                catchers::unauthorized,
+                catchers::internal_error,
+                catchers::unprocessable
+            ],
+        ))
+}

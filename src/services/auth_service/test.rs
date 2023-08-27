@@ -1,5 +1,9 @@
 use super::*;
-use crate::{db::test::establish_connection, models::user::UserRegister, services::UserService};
+use crate::{
+    db::{test::establish_connection, MockRedisRefresh},
+    models::user::UserRegister,
+    services::UserService,
+};
 
 type E = Result<(), Box<dyn std::error::Error>>;
 

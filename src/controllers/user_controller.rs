@@ -7,6 +7,9 @@ use crate::{
 };
 use rocket::{serde::json::Json, Route};
 
+#[cfg(test)]
+mod test;
+
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct UsernameExistsDto {
     username: String,
