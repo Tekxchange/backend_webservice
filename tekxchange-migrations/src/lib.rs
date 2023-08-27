@@ -7,6 +7,7 @@ mod m20230108_031029_product_audit;
 mod m20230109_234237_category;
 mod m20230118_011838_file;
 mod m20230521_213320_refresh;
+mod utils;
 
 pub struct Migrator;
 

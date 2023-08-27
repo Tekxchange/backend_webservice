@@ -1,6 +1,6 @@
-#[cfg(not(feature = "sqlite"))]
-use sea_orm::{ConnectionTrait, Statement};
 use sea_orm_migration::prelude::*;
+
+use crate::utils::create_trigger_on_table;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -8,18 +8,20 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let mut primary_key = ColumnDef::new(ProductPicture::Id);
+
+        #[cfg(not(feature = "sqlite"))]
+        primary_key.big_integer();
+
+        #[cfg(feature = "sqlite")]
+        primary_key.integer();
+
         manager
             .create_table(
                 Table::create()
                     .table(ProductPicture::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(ProductPicture::Id)
-                            .big_integer()
-                            .primary_key()
-                            .not_null()
-                            .auto_increment(),
-                    )
+                    .col(primary_key.primary_key().not_null().auto_increment())
                     .col(
                         ColumnDef::new(ProductPicture::CreatedAt)
                             .timestamp()
@@ -55,18 +57,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        #[cfg(not(feature = "sqlite"))]
-        let stmt = Statement::from_string(
-            manager.get_database_backend(),
-            String::from(
-                r#"
-                    CREATE TRIGGER "product_picture_timestamp" BEFORE INSERT OR UPDATE ON "product_picture"
-                    FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-                "#,
-            ),
-        );
-        #[cfg(not(feature = "sqlite"))]
-        manager.get_connection().execute(stmt).await?;
+        create_trigger_on_table(ProductPicture::Table, manager).await?;
 
         Ok(())
     }

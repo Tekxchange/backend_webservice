@@ -1,6 +1,4 @@
-use crate::m20230107_225831_products::Product;
-#[cfg(not(feature = "sqlite"))]
-use sea_orm::{ConnectionTrait, Statement};
+use crate::{m20230107_225831_products::Product, utils::create_trigger_on_table};
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -9,20 +7,20 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Replace the sample below with your own migration scripts
+        let mut primary_key = ColumnDef::new(Category::Id);
+
+        #[cfg(not(feature = "sqlite"))]
+        primary_key.big_integer();
+
+        #[cfg(feature = "sqlite")]
+        primary_key.integer();
 
         manager
             .create_table(
                 Table::create()
                     .table(Category::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Category::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
+                    .col(primary_key.not_null().auto_increment().primary_key())
                     .col(
                         ColumnDef::new(Category::CreatedAt)
                             .timestamp()
@@ -45,30 +43,21 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        create_trigger_on_table(Category::Table, manager).await?;
+
+        let mut primary_key = ColumnDef::new(ProductCategory::Id);
+
         #[cfg(not(feature = "sqlite"))]
-        let stmt = Statement::from_string(
-            manager.get_database_backend(),
-            String::from(
-                r#"
-                CREATE TRIGGER "category_timestamp" BEFORE INSERT OR UPDATE ON "category"
-                FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-                "#,
-            ),
-        );
-        #[cfg(not(feature = "sqlite"))]
-        manager.get_connection().execute(stmt).await?;
+        primary_key.big_integer();
+
+        #[cfg(feature = "sqlite")]
+        primary_key.integer();
 
         manager
             .create_table(
                 Table::create()
                     .table(ProductCategory::Table)
-                    .col(
-                        ColumnDef::new(ProductCategory::Id)
-                            .big_integer()
-                            .primary_key()
-                            .not_null()
-                            .auto_increment(),
-                    )
+                    .col(primary_key.primary_key().not_null().auto_increment())
                     .col(
                         ColumnDef::new(ProductCategory::CreatedAt)
                             .timestamp()
@@ -125,18 +114,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        #[cfg(not(feature = "sqlite"))]
-        let stmt = Statement::from_string(
-            manager.get_database_backend(),
-            String::from(
-                r#"
-                CREATE TRIGGER "product_category_timestamp" BEFORE INSERT OR UPDATE ON "product_category"
-                FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-            "#,
-            ),
-        );
-        #[cfg(not(feature = "sqlite"))]
-        manager.get_connection().execute(stmt).await?;
+        create_trigger_on_table(ProductCategory::Table, manager).await?;
 
         Ok(())
     }

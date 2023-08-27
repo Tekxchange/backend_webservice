@@ -1,6 +1,6 @@
+use crate::utils::create_trigger_on_table;
+
 use super::m20220101_000001_create_table::User;
-#[cfg(not(feature = "sqlite"))]
-use sea_orm::{ConnectionTrait, Statement};
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -9,19 +9,21 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let mut primary_key = ColumnDef::new(Product::Id);
+
+        #[cfg(not(feature = "sqlite"))]
+        primary_key.big_integer();
+
+        #[cfg(feature = "sqlite")]
+        primary_key.integer();
+
         // Replace the sample below with your own migration scripts
         manager
             .create_table(
                 Table::create()
                     .table(Product::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Product::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
+                    .col(primary_key.not_null().auto_increment().primary_key())
                     .col(ColumnDef::new(Product::ProductTitle).string().not_null())
                     .col(ColumnDef::new(Product::Description).string().not_null())
                     .col(ColumnDef::new(Product::Price).decimal().not_null())
@@ -69,18 +71,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        #[cfg(not(feature = "sqlite"))]
-        let stmt = Statement::from_string(
-            manager.get_database_backend(),
-            String::from(
-                r#"
-                    CREATE TRIGGER "product_timestamp" BEFORE INSERT OR UPDATE ON "product"
-                    FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-                "#,
-            ),
-        );
-        #[cfg(not(feature = "sqlite"))]
-        manager.get_connection().execute(stmt).await?;
+        create_trigger_on_table(Product::Table, manager).await?;
 
         Ok(())
     }

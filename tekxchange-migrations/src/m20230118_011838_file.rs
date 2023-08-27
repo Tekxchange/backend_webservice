@@ -1,8 +1,6 @@
-use crate::m20220101_000001_create_table::User;
 #[cfg(not(feature = "sqlite"))]
 use crate::m20230108_020136_pictures::ProductPicture;
-#[cfg(not(feature = "sqlite"))]
-use sea_orm::{ConnectionTrait, Statement};
+use crate::{m20220101_000001_create_table::User, utils::create_trigger_on_table};
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -11,18 +9,20 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let mut primary_key = ColumnDef::new(File::Id);
+
+        #[cfg(not(feature = "sqlite"))]
+        primary_key.big_integer();
+
+        #[cfg(feature = "sqlite")]
+        primary_key.integer();
+
         manager
             .create_table(
                 Table::create()
                     .table(File::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(File::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
+                    .col(primary_key.not_null().auto_increment().primary_key())
                     .col(ColumnDef::new(File::CreatedBy).big_integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
@@ -53,18 +53,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        #[cfg(not(feature = "sqlite"))]
-        let stmt = Statement::from_string(
-            manager.get_database_backend(),
-            String::from(
-                r#"
-                    CREATE TRIGGER "file_timestamp" BEFORE INSERT OR UPDATE ON "file"
-                    FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-                    "#,
-            ),
-        );
-        #[cfg(not(feature = "sqlite"))]
-        manager.get_connection().execute(stmt).await?;
+        create_trigger_on_table(File::Table, manager).await?;
 
         #[cfg(not(feature = "sqlite"))]
         manager

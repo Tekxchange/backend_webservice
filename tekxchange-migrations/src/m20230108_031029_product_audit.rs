@@ -1,7 +1,6 @@
 use crate::m20220101_000001_create_table::User;
 use crate::m20230107_225831_products::Product;
-#[cfg(not(feature = "sqlite"))]
-use sea_orm::{ConnectionTrait, Statement};
+use crate::utils::create_trigger_on_table;
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -10,18 +9,20 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let mut primary_key = ColumnDef::new(ProductAudit::Id);
+
+        #[cfg(not(feature = "sqlite"))]
+        primary_key.big_integer();
+
+        #[cfg(feature = "sqlite")]
+        primary_key.integer();
+
         manager
             .create_table(
                 Table::create()
                     .table(ProductAudit::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(ProductAudit::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
+                    .col(primary_key.not_null().auto_increment().primary_key())
                     .col(
                         ColumnDef::new(ProductAudit::CreatedAt)
                             .timestamp()
@@ -64,18 +65,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        #[cfg(not(feature = "sqlite"))]
-        let stmt = Statement::from_string(
-            manager.get_database_backend(),
-            String::from(
-                r#"
-                        CREATE TRIGGER "product_audit_timestamp" BEFORE INSERT OR UPDATE ON "product_audit"
-                        FOR EACH ROW EXECUTE PROCEDURE update_timestamp();
-                    "#,
-            ),
-        );
-        #[cfg(not(feature = "sqlite"))]
-        manager.get_connection().execute(stmt).await?;
+        create_trigger_on_table(ProductAudit::Table, manager).await?;
 
         Ok(())
     }
