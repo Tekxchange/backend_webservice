@@ -16,27 +16,32 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
 
   statsd:
     image: graphiteapp/graphite-statsd
+    ports:
+      - "8125:8125/udp"
+      - "8080"
 
   grafana:
     image: grafana/grafana:9.5.1
     ports:
       - "3000:3000"
 
-  backend:
-    build:
-      context: .
-      dockerfile: ./devel.Dockerfile
-      target: localdev
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-      - redis
-      - statsd
-    env_file:
-      - .env
-    volumes:
-      - ./:/usr/src/app:z
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: ./devel.Dockerfile
+  #     target: localdev
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - db
+  #     - redis
+  #     - statsd
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - ./:/usr/src/app:z

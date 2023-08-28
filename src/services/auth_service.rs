@@ -240,7 +240,7 @@ impl AuthService {
         let claims = Claims::with_custom_claims(
             user.clone(),
             validity
-                .unwrap_or_else(|| Duration::from_secs(60 * 60 * 24 * 7))
+                .unwrap_or_else(|| Duration::from_secs(30))
                 .into(),
         );
 

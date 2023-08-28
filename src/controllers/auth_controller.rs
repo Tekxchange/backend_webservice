@@ -1,10 +1,15 @@
-use rocket::{response::status::Created, serde::json::Json, Route};
-
 use crate::{
-    dtos::auth::LoginReturn,
-    models::user::{RefreshAuthUser, UserLogin, UserRegister},
+    models::user::{AuthUser, RefreshAuthUser, UserLogin, UserRegister},
     services::{AuthService, AuthServiceError, UserService, UserServiceError},
 };
+use rocket::{
+    http::{Cookie, CookieJar},
+    response::status::Created,
+    serde::json::Json,
+    time::{Duration, OffsetDateTime},
+    Route,
+};
+use serde::Serialize;
 
 #[post("/register", format = "json", data = "<user_register>")]
 async fn register(
@@ -18,37 +23,80 @@ async fn register(
     Ok(created_response)
 }
 
+#[derive(Serialize)]
+pub struct JwtReturn {
+    jwt: String,
+}
+
 #[post("/login", format = "json", data = "<login>")]
 async fn login(
     user_service: UserService,
     auth_service: AuthService,
     login: Json<UserLogin>,
-) -> Result<Json<LoginReturn>, UserServiceError> {
+    cookies: &CookieJar<'_>,
+) -> Result<Json<JwtReturn>, UserServiceError> {
     let token = user_service.login(login.0, auth_service).await?;
 
-    Ok(Json(token))
+    let mut refresh_expires = OffsetDateTime::now_utc();
+    refresh_expires += Duration::weeks(6);
+
+    let refresh_cookie = Cookie::build("refresh", token.refresh_token)
+        .http_only(true)
+        .expires(refresh_expires)
+        .same_site(rocket::http::SameSite::Strict)
+        .secure(true)
+        .finish();
+
+    cookies.add(refresh_cookie);
+
+    Ok(Json(JwtReturn { jwt: token.jwt }))
 }
 
 #[get("/refresh")]
 async fn refresh_login(
     mut auth_service: AuthService,
     auth_user: RefreshAuthUser,
-) -> Result<Json<String>, AuthServiceError> {
+    cookies: &CookieJar<'_>,
+) -> Result<Json<JwtReturn>, AuthServiceError> {
     let jwt = auth_service
         .generate_jwt(&auth_user.user, &auth_user.refresh_token, None)
         .await?;
 
-    Ok(Json(jwt))
+    let mut jwt_expires = OffsetDateTime::now_utc();
+    jwt_expires += Duration::WEEK;
+
+    let mut refresh_expires = OffsetDateTime::now_utc();
+    refresh_expires += Duration::weeks(6);
+
+    let refresh_cookie = Cookie::build("refresh", auth_user.refresh_token.to_owned())
+        .http_only(true)
+        .expires(refresh_expires)
+        .same_site(rocket::http::SameSite::Strict)
+        .secure(true)
+        .finish();
+
+    cookies.add(refresh_cookie);
+
+    Ok(Json(JwtReturn { jwt }))
 }
 
-#[post("/revoke_token")]
+#[get("/revoke_token")]
 async fn revoke_refresh_token(
     mut auth_service: AuthService,
     user_service: UserService,
+    auth_user: AuthUser,
+    cookies: &CookieJar<'_>
 ) -> Result<(), AuthServiceError> {
-    let first = user_service.get_user_by_id(&1).await.unwrap().unwrap();
+    let first = user_service
+        .get_user_by_id(&auth_user.user.id)
+        .await
+        .unwrap()
+        .unwrap();
 
     auth_service.revoke_refresh_token(&first).await?;
+    
+    cookies.remove(Cookie::named("refresh"));
+
     Ok(())
 }
 

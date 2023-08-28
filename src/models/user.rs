@@ -100,7 +100,7 @@ impl<'r> FromRequest<'r> for AuthUser {
             None => return Outcome::Failure((Status::Unauthorized, ())),
         };
 
-        let user = match auth_service.validate_jwt(jwt.to_owned(), None) {
+        let user = match auth_service.validate_jwt(jwt.into(), None) {
             Ok(user) => user,
             Err(_) => return Outcome::Failure((Status::Unauthorized, ())),
         };
@@ -128,8 +128,8 @@ impl<'r> FromRequest<'r> for RefreshAuthUser {
             Some(jwt) => jwt,
             None => return Outcome::Failure((Status::Unauthorized, ())),
         };
-        let refresh = match req.headers().get("refresh").next() {
-            Some(r) => r,
+        let refresh = match req.cookies().get("refresh") {
+            Some(r) => r.value(),
             None => return Outcome::Failure((Status::Unauthorized, ())),
         };
 

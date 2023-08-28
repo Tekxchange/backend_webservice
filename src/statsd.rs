@@ -65,10 +65,9 @@ impl Fairing for Statsd {
         let start_time = *request.local_cache(|| RequestTimer(None));
         if let Some(start_time) = start_time.0 {
             let diff = (end_time - start_time.time()).num_milliseconds() as u64;
-            self.client.time(&stat, diff).unwrap();
+            let _ = self.client.time(&stat, diff);
         }
-        self.client
-            .incr(&format!("request.{method}.{path}.{status}"))
-            .unwrap();
+        let _ = self.client
+            .incr(&format!("request.{method}.{path}.{status}"));
     }
 }
