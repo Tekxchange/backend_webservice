@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use super::role::Role;
-use crate::services::AuthService;
+use crate::services::{AuthService, UserService};
 use chrono::NaiveDateTime;
 use entity::user::Model as UserModel;
 use rocket::{
@@ -95,7 +93,7 @@ impl<'r> FromRequest<'r> for AuthUser {
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
         let auth_service: AuthService = try_outcome!(req.guard::<AuthService>().await);
 
-        let jwt = match req.headers().get("auth").next() {
+        let jwt = match req.headers().get("authorization").next() {
             Some(j) => j,
             None => return Outcome::Failure((Status::Unauthorized, ())),
         };
@@ -122,27 +120,36 @@ impl<'r> FromRequest<'r> for RefreshAuthUser {
     type Error = ();
 
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let auth_service: AuthService = try_outcome!(req.guard::<AuthService>().await);
+        let mut auth_service: AuthService = try_outcome!(req.guard::<AuthService>().await);
+        let user_service: UserService = try_outcome!(req.guard::<UserService>().await);
 
-        let jwt = match req.headers().get("auth").next() {
-            Some(jwt) => jwt,
-            None => return Outcome::Failure((Status::Unauthorized, ())),
-        };
         let refresh = match req.cookies().get("refresh") {
             Some(r) => r.value(),
             None => return Outcome::Failure((Status::Unauthorized, ())),
         };
 
-        let user = match auth_service.validate_jwt(
-            jwt.to_owned(),
-            Some(Duration::from_secs(60 * 60 * 24 * 7).into()),
-        ) {
-            Ok(user) => user,
-            Err(_) => return Outcome::Failure((Status::Unauthorized, ())),
+        let user_id = match match auth_service.get_user_from_refresh(refresh.to_owned()).await {
+            Ok(id) => id,
+            Err(_) => return Outcome::Failure((Status::InternalServerError, ())),
+        } {
+            Some(id) => id,
+            None => return Outcome::Failure((Status::Unauthorized, ())),
+        };
+
+        let user = match match user_service.get_user_by_id(&user_id).await {
+            Ok(model) => model,
+            Err(_) => return Outcome::Failure((Status::InternalServerError, ())),
+        } {
+            Some(model) => model,
+            None => return Outcome::Failure((Status::Unauthorized, ())),
         };
 
         Outcome::Success(RefreshAuthUser {
-            user,
+            user: UserJwtDto {
+                id: user.id,
+                username: user.username,
+                role: Role::try_from(user.role).unwrap(),
+            },
             refresh_token: refresh.to_owned(),
         })
     }

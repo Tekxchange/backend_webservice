@@ -38,7 +38,7 @@ async fn login(
     let token = user_service.login(login.0, auth_service).await?;
 
     let mut refresh_expires = OffsetDateTime::now_utc();
-    refresh_expires += Duration::weeks(6);
+    refresh_expires += Duration::days(30);
 
     let refresh_cookie = Cookie::build("refresh", token.refresh_token)
         .http_only(true)
@@ -62,11 +62,8 @@ async fn refresh_login(
         .generate_jwt(&auth_user.user, &auth_user.refresh_token, None)
         .await?;
 
-    let mut jwt_expires = OffsetDateTime::now_utc();
-    jwt_expires += Duration::WEEK;
-
     let mut refresh_expires = OffsetDateTime::now_utc();
-    refresh_expires += Duration::weeks(6);
+    refresh_expires += Duration::days(30);
 
     let refresh_cookie = Cookie::build("refresh", auth_user.refresh_token.to_owned())
         .http_only(true)

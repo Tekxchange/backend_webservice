@@ -162,28 +162,22 @@ impl AuthService {
         &mut self,
         user: &UserModel,
     ) -> Result<String, AuthServiceError> {
-        let mut res = self.redis.get_item(&user.id.to_string()).await.unwrap();
+        let res = RefreshEntity::find()
+            .filter(refresh_token::Column::UserId.eq(user.id))
+            .one(&self.db)
+            .await
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
+            .map(|r| r.token);
 
-        if res.is_none() {
-            res = RefreshEntity::find()
-                .filter(refresh_token::Column::UserId.eq(user.id))
-                .one(&self.db)
+        if let Some(ref token) = res {
+            self.redis
+                .set_item(token, &user.id.to_string())
                 .await
-                .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
-                .map(|r| r.token);
-            if let Some(ref token) = res {
-                self.redis
-                    .set_item(&user.id.to_string(), token)
-                    .await
-                    .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
-            }
+                .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+            return Ok(token.to_owned());
         }
 
-        if let Some(token) = res {
-            return Ok(token);
-        }
-
-        let token = uuid::Uuid::new_v4().to_string();
+        let token = uuid::Uuid::new_v4().to_string().replace("-", "");
 
         RefreshActiveModel {
             token: ActiveValue::Set(token.clone()),
@@ -200,6 +194,45 @@ impl AuthService {
             .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(token)
+    }
+
+    pub async fn get_user_from_refresh(
+        &mut self,
+        refresh: String,
+    ) -> Result<Option<i64>, AuthServiceError> {
+        let res = self
+            .redis
+            .get_item(&refresh)
+            .await
+            .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+
+        let mut id = None;
+
+        if let Some(ref id_str) = res {
+            id = Some(
+                id_str
+                    .parse::<i64>()
+                    .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?,
+            );
+        }
+
+        if id.is_none() {
+            id = RefreshEntity::find()
+                .filter(refresh_token::Column::Token.eq(&refresh))
+                .one(&self.db)
+                .await
+                .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
+                .map(|model| model.user_id);
+
+            if let Some(ref id) = id {
+                self.redis
+                    .set_item(&refresh, &id.to_string())
+                    .await
+                    .map_err(|e| AuthServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
+            }
+        }
+
+        Ok(id)
     }
 
     pub async fn validate_refresh_token(
@@ -240,7 +273,7 @@ impl AuthService {
         let claims = Claims::with_custom_claims(
             user.clone(),
             validity
-                .unwrap_or_else(|| Duration::from_secs(30))
+                .unwrap_or_else(|| Duration::from_secs(60 * 60))
                 .into(),
         );
 
