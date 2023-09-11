@@ -18,6 +18,12 @@ pub struct ProductFilter {
     pub product_id_lower: Option<i64>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductCreated {
+    pub id: i64,
+}
+
 #[derive(Responder)]
 pub struct FileResponder {
     pub file: File,

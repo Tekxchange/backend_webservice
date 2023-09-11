@@ -1,5 +1,5 @@
 use crate::{
-    dtos::product::ProductFilter,
+    dtos::product::{ProductCreated, ProductFilter},
     models::{
         product::{ProductDetails, ProductLocationReturn, ProductReturn},
         user::AuthUser,
@@ -17,12 +17,15 @@ async fn create_product(
     product_service: ProductService,
     product_create: Json<ProductDetails>,
     auth_user: AuthUser,
-) -> Result<Created<()>, ProductServiceError> {
-    product_service
+) -> Result<Created<Json<ProductCreated>>, ProductServiceError> {
+    let id = product_service
         .create_new_product(product_create.0, auth_user)
         .await?;
 
-    Ok(Created::new(""))
+    let created =
+        Created::new(format!("/api/products/product?id={id}")).body(Json(ProductCreated { id }));
+
+    Ok(created)
 }
 
 #[get("/product?<id>")]
