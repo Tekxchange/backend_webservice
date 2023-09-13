@@ -1,7 +1,7 @@
 use crate::{
     dtos::product::{ProductCreated, ProductFilter},
     models::{
-        product::{ProductDetails, ProductLocationReturn, ProductReturn},
+        product::{ProductDetails, ProductLocationReturn, ProductReturn, ProductReturnNoUser},
         user::AuthUser,
     },
     services::{ProductService, ProductServiceError},
@@ -72,12 +72,27 @@ async fn search_for_products(
     Ok(Json(found_products))
 }
 
+#[get("/by_user?<user_id>&<limit>&<lower_limit>")]
+async fn get_products_by_user_id(
+    product_service: ProductService,
+    user_id: i64,
+    limit: Option<u64>,
+    lower_limit: Option<i64>,
+) -> Result<Json<Vec<ProductReturnNoUser>>, ProductServiceError> {
+    let to_return = product_service
+        .get_products_by_user_id(user_id, limit, lower_limit)
+        .await?;
+
+    Ok(Json(to_return))
+}
+
 pub fn routes() -> Vec<Route> {
     routes![
         create_product,
         get_product_by_id,
         update_product_by_id,
         delete_product_by_id,
-        search_for_products
+        search_for_products,
+        get_products_by_user_id
     ]
 }

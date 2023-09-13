@@ -1,7 +1,7 @@
 use crate::{
     dtos::product::ProductFilter,
     models::{
-        product::{ProductDetails, ProductLocationReturn, ProductReturn},
+        product::{ProductDetails, ProductLocationReturn, ProductReturn, ProductReturnNoUser},
         user::{AuthUser, MinUserReturnDto},
     },
 };
@@ -254,6 +254,47 @@ impl ProductService {
             })
             .filter(|item| item.is_some())
             .map(|item| item.unwrap())
+            .collect())
+    }
+
+    pub async fn get_products_by_user_id(
+        &self,
+        user_id: i64,
+        limit: Option<u64>,
+        lower_limit: Option<i64>,
+    ) -> Result<Vec<ProductReturnNoUser>, ProductServiceError> {
+        let limit = limit.unwrap_or(10);
+
+        let mut query = ProductEntity::find()
+            .filter(product::Column::CreatedBy.eq(user_id))
+            .limit(limit)
+            .find_with_related(entity::product_picture::Entity)
+            .order_by_desc(product::Column::Id);
+
+        if let Some(lower_limit) = lower_limit {
+            query = query.filter(product::Column::Id.gt(lower_limit));
+        }
+
+        let found = query
+            .all(&self.db_connection)
+            .await
+            .map_err(|e| ProductServiceError::OrmError(e))?
+            .into_iter();
+
+        Ok(found
+            .map(|(product, picture)| ProductReturnNoUser {
+                id: product.id,
+                description: product.description,
+                latitude: product.location_latitude,
+                longitude: product.location_longitude,
+                pictures: picture.into_iter().map(|pic| pic.id).collect(),
+                price: product.price,
+                title: product.product_title,
+                city: product.location_city,
+                country: product.location_country,
+                state: product.location_state,
+                zip: product.location_zip,
+            })
             .collect())
     }
 }
