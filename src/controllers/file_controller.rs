@@ -4,33 +4,30 @@ use crate::{
     services::{FileService, FileServiceError},
 };
 use anyhow::anyhow;
-use rocket::{data::ToByteUnit, http::ContentType, Data, Route};
+use rocket::{form::Form, fs::TempFile, Route};
+
+#[derive(FromForm, Debug)]
+struct UploadData<'a> {
+    data: TempFile<'a>,
+}
 
 #[post("/upload?<product_id>", data = "<data>")]
-async fn upload_file(
+async fn upload_file<'a>(
     user: AuthUser,
     file_service: FileService,
-    data: Data<'_>,
-    content_type: &ContentType,
-    product_id: i64
+    mut data: Form<Option<UploadData<'a>>>,
+    product_id: i64,
 ) -> Result<(), FileServiceError> {
-    let data = data.open(10.megabytes());
-    let data_bytes: Vec<u8> = data
-        .into_bytes()
-        .await
-        .map_err(|e| FileServiceError::Unknown(crate::AnyhowResponder(anyhow!(e))))?
-        .into_inner();
+    let data = data
+        .take()
+        .ok_or(FileServiceError::FileCreationError(crate::AnyhowResponder(
+            anyhow!("No files found to process"),
+        )))?;
 
-    let extension =
-        content_type
-            .0
-            .extension()
-            .ok_or(FileServiceError::Unknown(crate::AnyhowResponder(anyhow!(
-                "Unknown incoming file extension"
-            ))))?;
+    let file = data.data;
 
     file_service
-        .create_file_data(user, &data_bytes, extension.as_str(), product_id)
+        .create_file_data(user, file, product_id)
         .await?;
 
     Ok(())

@@ -1,6 +1,7 @@
 use crate::{dtos::product::FileResponder, models::user::AuthUser, AnyhowResponder};
 use anyhow::anyhow;
 use rocket::{
+    fs::TempFile,
     http::ContentType,
     outcome::{try_outcome, IntoOutcome},
     request::FromRequest,
@@ -9,7 +10,6 @@ use rocket::{
 use sea_orm::{prelude::*, ActiveValue, DatabaseConnection};
 use std::{
     fs::OpenOptions,
-    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 use thiserror::Error;
@@ -63,13 +63,23 @@ impl FileService {
         }
     }
 
-    pub async fn create_file_data(
+    pub async fn create_file_data<'a>(
         &self,
         user: AuthUser,
-        data: &[u8],
-        extension: &str,
+        mut data: TempFile<'a>,
         for_product: i64,
     ) -> Result<i64, FileServiceError> {
+        let extension = data
+            .content_type()
+            .map(|c| {
+                c.extension()
+                    .ok_or(FileServiceError::Unknown(crate::AnyhowResponder(anyhow!(
+                        "Recieved an unknown file extension"
+                    ))))
+            })
+            .ok_or(FileServiceError::Unknown(crate::AnyhowResponder(anyhow!(
+                "Recieved an unknown file extension"
+            ))))??;
         let file_location: PathBuf;
         loop {
             let new_key = uuid::Uuid::new_v4().to_string();
@@ -116,15 +126,10 @@ impl FileService {
                 "Unable to convert Path to String"
             ))))?;
 
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(&file_location)
-            .map_err(|e| FileServiceError::FileCreationError(AnyhowResponder(anyhow!(e))))?;
+        println!("{0:?}", data.path());
 
-        let mut writer = BufWriter::new(file);
-        writer
-            .write_all(data)
+        data.persist_to(&file_location)
+            .await
             .map_err(|e| FileServiceError::FileCreationError(AnyhowResponder(anyhow!(e))))?;
 
         let entity::file::Model { id: file_id, .. } = entity::file::ActiveModel {
