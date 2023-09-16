@@ -126,8 +126,6 @@ impl FileService {
                 "Unable to convert Path to String"
             ))))?;
 
-        println!("{0:?}", data.path());
-
         data.persist_to(&file_location)
             .await
             .map_err(|e| FileServiceError::FileCreationError(AnyhowResponder(anyhow!(e))))?;
