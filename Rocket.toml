@@ -4,5 +4,5 @@ port = 8000
 auth_service = "http://localhost:8002"
 
 [default.limits]
-forms = "64 kB"
-json = "1 MiB"
+forms = "6.5 MiB"
+json = "1.5 MiB"
