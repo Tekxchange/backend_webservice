@@ -4,7 +4,7 @@ use crate::{
         product::{ProductDetails, ProductLocationReturn, ProductReturn, ProductReturnNoUser},
         user::AuthUser,
     },
-    services::{ProductService, ProductServiceError},
+    services::{FileService, ProductService, ProductServiceError},
 };
 use rocket::{
     response::status::{Accepted, Created},
@@ -54,10 +54,11 @@ async fn update_product_by_id(
 #[delete("/product?<id>")]
 async fn delete_product_by_id(
     product_service: ProductService,
+    file_service: FileService,
     id: i64,
     user: AuthUser,
 ) -> Result<(), ProductServiceError> {
-    product_service.delete_product_by_id(id, user).await?;
+    product_service.delete_product_by_id(id, user, file_service).await?;
 
     Ok(())
 }

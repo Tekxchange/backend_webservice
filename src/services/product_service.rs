@@ -1,3 +1,4 @@
+use super::FileService;
 use crate::{
     dtos::product::ProductFilter,
     models::{
@@ -20,6 +21,7 @@ use sea_orm::{
 };
 use serde_json::json;
 use thiserror::Error;
+
 #[cfg(test)]
 mod test;
 
@@ -178,20 +180,32 @@ impl ProductService {
         &self,
         id: i64,
         user: AuthUser,
+        file_service: FileService,
     ) -> Result<(), ProductServiceError> {
-        let product: ProductActiveModel = ProductEntity::find_by_id(id)
-            .one(&self.db_connection)
+        let found = ProductEntity::find_by_id(id)
+            .find_with_related(entity::product_picture::Entity)
+            .all(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?
-            .ok_or(ProductServiceError::NotFound(id))?
-            .into();
+            .map_err(ProductServiceError::OrmError)?;
 
-        if product.created_by.clone().unwrap() != user.user.id {
+        let (product, pics) = found
+            .iter()
+            .next()
+            .ok_or(ProductServiceError::NotFound(id))?;
+
+        let pic_ids = pics.iter().map(|pic| pic.id).collect::<Vec<_>>();
+
+        if product.created_by.clone() != user.user.id {
             return Err(ProductServiceError::NotAllowed);
         }
 
-        product
-            .delete(&self.db_connection)
+        file_service
+            .delete_files(pic_ids.as_slice(), user)
+            .await
+            .map_err(|_| ProductServiceError::Unknown)?;
+
+        entity::product::Entity::delete_by_id(id)
+            .exec(&self.db_connection)
             .await
             .map_err(ProductServiceError::OrmError)?;
 

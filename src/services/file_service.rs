@@ -34,6 +34,9 @@ pub enum FileServiceError {
     #[error("Unable to add new pictures for product as you have reached the max already")]
     #[response(status = 400)]
     TooManyPictures(AnyhowResponder),
+    #[error("Query failed")]
+    #[response(status = 500)]
+    OrmError(AnyhowResponder),
 }
 
 #[async_trait]
@@ -61,6 +64,35 @@ impl FileService {
             db,
             base_file_path: location,
         }
+    }
+
+    pub async fn delete_files(&self, ids: &[i64], user: AuthUser) -> Result<(), FileServiceError> {
+        let files: Vec<_> = ids
+            .iter()
+            .map(|id| async move {
+                entity::file::Entity::find_by_id(*id)
+                    .filter(entity::file::Column::CreatedBy.eq(user.user.id))
+                    .one(&self.db)
+                    .await
+            })
+            .collect();
+
+        for file in files {
+            let file = file
+                .await
+                .map_err(|e| FileServiceError::OrmError(AnyhowResponder(anyhow!(e))))?;
+
+            if let Some(file) = file {
+                let location = PathBuf::from(file.file_location);
+                let _ = std::fs::remove_file(location);
+                let _ = entity::file::Entity::delete_by_id(file.id)
+                    .filter(entity::file::Column::CreatedBy.eq(user.user.id))
+                    .exec(&self.db)
+                    .await;
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn create_file_data<'a>(
