@@ -63,36 +63,15 @@ mod generate_refresh_token {
     use super::*;
 
     #[tokio::test]
-    async fn existing_redis() -> E {
-        let db = establish_connection().await?;
-
-        let test_user = get_test_user(db.clone()).await;
-
-        let key = AuthService::get_key_pair()?;
-        let mut redis = MockRedisRefresh::default();
-        redis
-            .expect_get_item()
-            .times(1)
-            .returning(|_| Ok(Some(String::from("returned_item"))));
-
-        let mut auth_service = AuthService::new(db, Box::new(redis), key);
-
-        let refresh = auth_service.generate_refresh_token(&test_user).await;
-        assert!(refresh.is_ok());
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn missing_redis() -> E {
         let mut redis = MockRedisRefresh::default();
-        redis.expect_get_item().times(1).returning(|_| Ok(None));
-        redis.expect_set_item().times(1).returning(|_, _| Ok(()));
 
         let db = establish_connection().await?;
         let key = AuthService::get_key_pair()?;
 
         let test_user = get_test_user(db.clone()).await;
+
+        redis.expect_set_item().times(1).returning(|_, _| Ok(()));
 
         let mut auth_service = AuthService::new(db, Box::new(redis), key);
         let token = auth_service.generate_refresh_token(&test_user).await;
@@ -353,73 +332,30 @@ mod validate_jwt {
 mod login {
     use std::sync::mpsc::channel;
 
-    use mockall::Sequence;
-
     use super::*;
 
     #[tokio::test]
-    async fn login_successful_no_redis() -> E {
+    async fn login_successful() -> E {
         let db = establish_connection().await?;
         let mut redis = MockRedisRefresh::default();
         let key = AuthService::get_key_pair()?;
         let user = get_test_user(db.clone()).await;
 
-        let mut get_seq = Sequence::new();
-
         let (sx, rx) = channel::<String>();
 
-        redis
-            .expect_get_item()
-            .once()
-            .in_sequence(&mut get_seq)
-            .returning(|_| Ok(None));
-
-        redis
-            .expect_set_item()
-            .returning(move |_, v| {
-                sx.send(v.to_owned()).unwrap();
-                Ok(())
-            })
-            .times(1);
+        redis.expect_set_item().returning(move |_, v| {
+            sx.send(v.to_owned()).unwrap();
+            Ok(())
+        });
 
         redis
             .expect_get_item()
             .once()
-            .in_sequence(&mut get_seq)
             .returning(move |_| Ok(Some(rx.recv().unwrap())));
 
         let mut auth_service = AuthService::new(db, Box::new(redis), key);
 
         let res = auth_service.login(String::from("password"), &user).await;
-
-        assert!(res.is_ok());
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn login_successful_with_redis() -> E {
-        let db = establish_connection().await?;
-        let mut redis = MockRedisRefresh::default();
-        let key = AuthService::get_key_pair()?;
-        let user = get_test_user(db.clone()).await;
-
-        let mut get_seq = Sequence::new();
-
-        redis
-            .expect_get_item()
-            .once()
-            .in_sequence(&mut get_seq)
-            .returning(|_| Ok(Some("refresh".into())));
-
-        redis
-            .expect_get_item()
-            .once()
-            .in_sequence(&mut get_seq)
-            .returning(move |_| Ok(Some("refresh".into())));
-
-        let mut auth_service = AuthService::new(db, Box::new(redis), key);
-
-        let res = auth_service.login("password".into(), &user).await;
 
         assert!(res.is_ok());
         Ok(())

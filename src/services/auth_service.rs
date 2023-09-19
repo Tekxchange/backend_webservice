@@ -209,6 +209,7 @@ impl AuthService {
         let mut id = None;
 
         if let Some(ref id_str) = res {
+            println!("Found id: {id_str}");
             id = Some(
                 id_str
                     .parse::<i64>()
