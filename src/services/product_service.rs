@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use entity::product::{self, ActiveModel as ProductActiveModel, Entity as ProductEntity};
+use geolocation_utils::DistanceUnit;
 use rocket::{
     http::Status,
     outcome::IntoOutcome,
@@ -216,10 +217,11 @@ impl ProductService {
         &self,
         filter: ProductFilter,
     ) -> Result<Vec<ProductLocationReturn>, ProductServiceError> {
+        let distance_units = filter.units.clone().unwrap_or(DistanceUnit::Miles);
         let bounds = geolocation_utils::CoordinateBoundaries::new(
-            filter.coordinate,
+            filter.coordinate.clone(),
             filter.radius.to_f64().unwrap(),
-            filter.units,
+            filter.units.clone(),
         )
         .ok_or_else(|| ProductServiceError::Unknown)?;
 
@@ -268,6 +270,18 @@ impl ProductService {
             })
             .filter(|item| item.is_some())
             .map(|item| item.unwrap())
+            .filter(|item| {
+                let coordinate1 = geolocation_utils::Coordinate::new(
+                    item.latitude.to_f64().unwrap(),
+                    item.longitude.to_f64().unwrap(),
+                );
+                let coordinate2 = filter.coordinate.clone();
+                return coordinate2.in_radius(
+                    &coordinate1,
+                    filter.radius.to_f64().unwrap(),
+                    &distance_units,
+                );
+            })
             .collect())
     }
 

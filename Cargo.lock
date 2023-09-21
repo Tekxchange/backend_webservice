@@ -1208,9 +1208,9 @@ dependencies = [
 
 [[package]]
 name = "geolocation_utils"
-version = "0.1.3"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df96320696b12694c0f82cc8cfeb3485647db8bf34b702e95fdded09a628580b"
+checksum = "4533d5c0400119185b397bc70a2b7aa3ff645263e975659e770f2873510fca11"
 dependencies = [
  "serde",
 ]

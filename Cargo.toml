@@ -29,7 +29,7 @@ redis = { version = "0.23.0", features = ["tokio-comp"] }
 rust_decimal = { version = "1.29.1", features = ["serde-float"] }
 uuid = { version = "1.3.3", features = ["v4"] }
 mockall = { version = "0.11.4" }
-geolocation_utils = { version = "0.1.3", features = ["serde"] }
+geolocation_utils = { version = "0.1.5", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1.28.2", features = ["full"] }
