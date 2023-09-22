@@ -19,6 +19,7 @@ pub struct ProductDetails {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProductReturn {
+    pub id: i64,
     pub title: String,
     pub description: String,
     pub price: Decimal,
@@ -50,4 +51,5 @@ pub struct ProductLocationReturn {
     pub id: i64,
     pub latitude: Decimal,
     pub longitude: Decimal,
+    pub price: Decimal
 }

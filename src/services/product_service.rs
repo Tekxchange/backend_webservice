@@ -8,6 +8,7 @@ use crate::{
 };
 use entity::product::{self, ActiveModel as ProductActiveModel, Entity as ProductEntity};
 use geolocation_utils::DistanceUnit;
+use migration::extension::postgres::PgExpr;
 use rocket::{
     http::Status,
     outcome::IntoOutcome,
@@ -121,6 +122,7 @@ impl ProductService {
                 .map_err(|e| ProductServiceError::OrmError(e))?;
 
             Ok(ProductReturn {
+                id: prod.id,
                 title: prod.product_title,
                 description: prod.description,
                 price: prod.price,
@@ -240,7 +242,9 @@ impl ProductService {
             found = found.filter(product::Column::Price.gte(low));
         }
         if let Some(query) = filter.query {
-            found = found.filter(product::Column::ProductTitle.like(&query));
+            found = found.filter(
+                Expr::col(entity::product::Column::ProductTitle).ilike(format!("%{query}%")),
+            );
         }
         if let Some(zip) = filter.zip {
             found = found.filter(product::Column::LocationZip.like(&zip));
@@ -266,6 +270,7 @@ impl ProductService {
                     latitude: prod.location_latitude.unwrap(),
                     longitude: prod.location_longitude.unwrap(),
                     id: prod.id,
+                    price: prod.price,
                 })
             })
             .filter(|item| item.is_some())
