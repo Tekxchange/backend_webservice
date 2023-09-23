@@ -59,7 +59,9 @@ impl Fairing for Statsd {
             return;
         }
 
-        let stat = format!("request.{method}.{path}");
+        let path = path.replace("/", ".");
+
+        let stat = format!("request.{method}{path}");
 
         let end_time = Utc::now().time();
         let start_time = *request.local_cache(|| RequestTimer(None));
@@ -68,6 +70,6 @@ impl Fairing for Statsd {
             let _ = self.client.time(&stat, diff);
         }
         let _ = self.client
-            .incr(&format!("request.{method}.{path}.{status}"));
+            .incr(&format!("request.{method}{path}.{status}"));
     }
 }
