@@ -6,10 +6,12 @@ mod cors;
 mod db;
 mod dtos;
 mod guards;
+mod logger;
 mod models;
 mod services;
 mod statsd;
 use cors::{Cors, Options};
+use logger::setup_loki;
 use migration::{Migrator, MigratorTrait};
 use rocket::{response::Responder, Response};
 use serde_json::json;
@@ -39,6 +41,7 @@ impl std::fmt::Display for AnyhowResponder {
 #[launch]
 pub async fn rocket() -> _ {
     dotenvy::dotenv().ok();
+    setup_loki();
     let conn = db::establish_connection().await.unwrap();
     let redis = db::redis_connection().await.unwrap();
     let key = AuthService::get_key_pair().unwrap();
