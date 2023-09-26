@@ -6,19 +6,19 @@ use crate::{
         user::{UserLogin, UserRegister},
     },
     services::auth_service::AuthService,
+    AnyhowResponder,
 };
+use anyhow::anyhow;
 use entity::user::{ActiveModel as UserActiveModel, Entity as UserEntity, Model as UserModel};
 use lazy_static::lazy_static;
 use regex::Regex;
 use rocket::{
-    http::Status,
     outcome::IntoOutcome,
     request::{self, FromRequest},
     response::Responder,
-    Request, Response,
+    Request,
 };
 use sea_orm::{prelude::*, query::Condition, ActiveValue, DatabaseConnection, Set};
-use serde_json::json;
 use thiserror::Error;
 #[cfg(test)]
 mod test;
@@ -28,38 +28,25 @@ lazy_static! {
         Regex::new(r"(?i)(admin|moderator|fuck|ass|shit|cunt|piss|wank|twat)").unwrap();
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Responder)]
 pub enum UserServiceError {
     #[error("This username and/or email already exists")]
-    DuplicateUserError,
-    #[error(transparent)]
-    OrmError(sea_orm::DbErr),
+    #[response(status = 400)]
+    DuplicateUserError(AnyhowResponder),
+    #[error("An unknown error has occurred")]
+    #[response(status = 500)]
+    InternalError(AnyhowResponder),
     #[error("User with that email, username, or id does not exist")]
-    UserNotFound,
+    #[response(status = 404)]
+    UserNotFound(AnyhowResponder),
     #[error("The request contains forbidden words")]
-    ForbiddenWords,
+    #[response(status = 400)]
+    ForbiddenWords(AnyhowResponder),
     #[error(transparent)]
     AuthServiceError(AuthServiceError),
 }
 
-impl<'r> Responder<'r, 'static> for UserServiceError {
-    fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
-        match self {
-            Self::DuplicateUserError | Self::ForbiddenWords => {
-                Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
-                    .status(Status::BadRequest)
-                    .ok()
-            }
-            Self::UserNotFound => {
-                Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
-                    .status(Status::NotFound)
-                    .ok()
-            }
-            _ => Response::build().status(Status::InternalServerError).ok(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct UserService {
     db_connection: DatabaseConnection,
 }
@@ -98,14 +85,18 @@ impl UserService {
             )
             .count(&self.db_connection)
             .await
-            .map_err(UserServiceError::OrmError)?;
+            .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         if found_users > 0 {
-            return Err(UserServiceError::DuplicateUserError);
+            return Err(UserServiceError::DuplicateUserError(AnyhowResponder(
+                anyhow!("User already exists"),
+            )));
         }
 
         if !bypass_name_check && INVALID_USERNAME_REGEX.is_match(&register.username) {
-            return Err(UserServiceError::ForbiddenWords);
+            return Err(UserServiceError::ForbiddenWords(AnyhowResponder(anyhow!(
+                "User attempted signup with a forbidden word in username"
+            ))));
         }
 
         register.password = AuthService::hash_password(&register.password)
@@ -119,7 +110,7 @@ impl UserService {
         }
         .insert(&self.db_connection)
         .await
-        .map_err(UserServiceError::OrmError)?;
+        .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(id)
     }
@@ -130,7 +121,7 @@ impl UserService {
             .filter(Condition::all().add(user::Column::Email.like(email)))
             .one(&self.db_connection)
             .await
-            .map_err(UserServiceError::OrmError)?;
+            .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(found)
     }
@@ -141,7 +132,7 @@ impl UserService {
             .filter(Condition::all().add(user::Column::Username.like(username)))
             .one(&self.db_connection)
             .await
-            .map_err(UserServiceError::OrmError)?;
+            .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(found)
     }
@@ -150,7 +141,7 @@ impl UserService {
         UserEntity::find_by_id(*id)
             .one(&self.db_connection)
             .await
-            .map_err(UserServiceError::OrmError)
+            .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))
     }
 
     pub async fn username_exists(&self, username: &str) -> Result<bool, UserServiceError> {
@@ -160,7 +151,7 @@ impl UserService {
             .filter(Condition::any().add(user::Column::Username.like(username)))
             .count(&self.db_connection)
             .await
-            .map_err(UserServiceError::OrmError)?;
+            .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(found_count > 0)
     }
@@ -172,7 +163,7 @@ impl UserService {
             .filter(Condition::any().add(user::Column::Email.like(email)))
             .count(&self.db_connection)
             .await
-            .map_err(UserServiceError::OrmError)?;
+            .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(found_count > 0)
     }
@@ -191,7 +182,9 @@ impl UserService {
         }
 
         if user.is_none() {
-            return Err(UserServiceError::UserNotFound);
+            return Err(UserServiceError::UserNotFound(AnyhowResponder(anyhow!(
+                "Requested user is not found"
+            ))));
         }
 
         let user: UserModel = user.unwrap();
@@ -212,13 +205,15 @@ impl UserService {
         let mut user: entity::user::ActiveModel = self
             .get_user_by_id(&user_id)
             .await?
-            .ok_or(UserServiceError::UserNotFound)?
+            .ok_or(UserServiceError::UserNotFound(AnyhowResponder(anyhow!(
+                "Requested user is not found"
+            ))))?
             .into();
 
         user.role = Set(new_role as i16);
         user.update(&self.db_connection)
             .await
-            .map_err(UserServiceError::OrmError)?;
+            .map_err(|e| UserServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(())
     }

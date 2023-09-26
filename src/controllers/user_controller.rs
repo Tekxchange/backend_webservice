@@ -15,6 +15,7 @@ struct UsernameExistsDto {
     username: String,
 }
 
+#[tracing::instrument(level = "trace")]
 #[post("/username_exists", format = "json", data = "<username>")]
 async fn username_exists(
     user_service: UserService,
@@ -30,6 +31,7 @@ struct EmailExistsDto {
     email: String,
 }
 
+#[tracing::instrument(level = "trace")]
 #[post("/email_exists", format = "json", data = "<email>")]
 async fn email_exists(
     user_service: UserService,
@@ -40,6 +42,7 @@ async fn email_exists(
     Ok(Json(found))
 }
 
+#[tracing::instrument(level = "trace")]
 #[get("/user/info")]
 async fn get_user_info(
     auth_user: AuthUser,

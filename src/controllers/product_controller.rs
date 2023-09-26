@@ -12,6 +12,7 @@ use rocket::{
     Route,
 };
 
+#[tracing::instrument(level = "trace")]
 #[post("/create", format = "json", data = "<product_create>")]
 async fn create_product(
     product_service: ProductService,
@@ -28,6 +29,7 @@ async fn create_product(
     Ok(created)
 }
 
+#[tracing::instrument(level = "trace")]
 #[get("/product?<id>")]
 async fn get_product_by_id(
     product_service: ProductService,
@@ -38,6 +40,7 @@ async fn get_product_by_id(
     Ok(Json(found_product))
 }
 
+#[tracing::instrument(level = "trace")]
 #[put("/product?<id>", format = "json", data = "<product>")]
 async fn update_product_by_id(
     product_service: ProductService,
@@ -51,6 +54,7 @@ async fn update_product_by_id(
     Ok(Accepted(None))
 }
 
+#[tracing::instrument(level = "trace")]
 #[delete("/product?<id>")]
 async fn delete_product_by_id(
     product_service: ProductService,
@@ -63,6 +67,7 @@ async fn delete_product_by_id(
     Ok(())
 }
 
+#[tracing::instrument(level = "trace")]
 #[post("/search", data = "<filter>")]
 async fn search_for_products(
     filter: Json<ProductFilter>,
@@ -73,6 +78,7 @@ async fn search_for_products(
     Ok(Json(found_products))
 }
 
+#[tracing::instrument(level = "trace")]
 #[get("/by_user?<user_id>&<limit>&<lower_limit>")]
 async fn get_products_by_user_id(
     product_service: ProductService,

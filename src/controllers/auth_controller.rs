@@ -11,6 +11,7 @@ use rocket::{
 };
 use serde::Serialize;
 
+#[tracing::instrument(level = "trace")]
 #[post("/register", format = "json", data = "<user_register>")]
 async fn register(
     user_service: UserService,
@@ -35,6 +36,7 @@ async fn login(
     login: Json<UserLogin>,
     cookies: &CookieJar<'_>,
 ) -> Result<Json<JwtReturn>, UserServiceError> {
+    tracing::error!(message = "Entered login function");
     let token = user_service.login(login.0, auth_service).await?;
 
     let mut refresh_expires = OffsetDateTime::now_utc();
@@ -52,6 +54,7 @@ async fn login(
     Ok(Json(JwtReturn { jwt: token.jwt }))
 }
 
+#[tracing::instrument(level = "trace")]
 #[get("/refresh")]
 async fn refresh_login(
     mut auth_service: AuthService,
@@ -77,6 +80,7 @@ async fn refresh_login(
     Ok(Json(JwtReturn { jwt }))
 }
 
+#[tracing::instrument(level = "trace")]
 #[get("/revoke_token")]
 async fn revoke_refresh_token(
     mut auth_service: AuthService,

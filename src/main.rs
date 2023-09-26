@@ -6,12 +6,14 @@ mod cors;
 mod db;
 mod dtos;
 mod guards;
+mod logger;
 mod models;
 mod services;
 mod statsd;
 use cors::{Cors, Options};
+use logger::setup_loki;
 use migration::{Migrator, MigratorTrait};
-use rocket::{response::Responder, Response};
+use rocket::{response::Responder, Config, Response};
 use serde_json::json;
 use services::{AuthService, UserService};
 use statsd::Statsd;
@@ -24,6 +26,21 @@ pub struct AnyhowResponder(anyhow::Error);
 
 impl<'r> Responder<'r, 'static> for AnyhowResponder {
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        let (method, uri) = request
+            .route()
+            .map(|r| (r.method.as_str(), r.uri.as_str()))
+            .unzip();
+
+        let trace = self.0.backtrace();
+        let source = self.0.root_cause().to_string();
+
+        tracing::error!(
+            error = self.0.to_string(),
+            backtrace = trace.to_string(),
+            source,
+            method,
+            uri
+        );
         let inner_error = self.0.to_string();
         Response::build_from(json!({ "error": inner_error }).respond_to(request)?).ok()
     }
@@ -38,7 +55,11 @@ impl std::fmt::Display for AnyhowResponder {
 
 #[launch]
 pub async fn rocket() -> _ {
+    env::set_var("RUST_BACKTRACE", "full");
+    env::set_var("RUST_LOG", "none");
+    env::set_var("rust_tekxchange_backend", "debug");
     dotenvy::dotenv().ok();
+    setup_loki();
     let conn = db::establish_connection().await.unwrap();
     let redis = db::redis_connection().await.unwrap();
     let key = AuthService::get_key_pair().unwrap();
@@ -52,7 +73,7 @@ pub async fn rocket() -> _ {
         .unwrap();
 
     if !found_admin {
-        println!("No admin found -- Seeding new admin");
+        tracing::info!("No admin found -- Seeding new admin");
         let admin_email = env::var("ADMIN_EMAIL").unwrap();
         let admin_password = env::var("ADMIN_PASSWORD").unwrap();
         let user_register = UserRegister {
@@ -67,7 +88,11 @@ pub async fn rocket() -> _ {
             .unwrap();
     }
 
-    controllers::mount_routes(rocket::build())
+    let mut config = Config::default();
+    config.cli_colors = false;
+    config.log_level = rocket::log::LogLevel::Off;
+
+    controllers::mount_routes(rocket::custom(config))
         .manage(conn)
         .manage(redis)
         .manage(key)

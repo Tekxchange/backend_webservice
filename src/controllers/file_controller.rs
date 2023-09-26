@@ -11,6 +11,7 @@ struct UploadData<'a> {
     data: TempFile<'a>,
 }
 
+#[tracing::instrument(level = "trace")]
 #[post("/upload?<product_id>", data = "<data>")]
 async fn upload_file<'a>(
     user: AuthUser,
@@ -33,6 +34,7 @@ async fn upload_file<'a>(
     Ok(())
 }
 
+#[tracing::instrument(level = "trace")]
 #[get("/get_file?<id>")]
 async fn get_file(id: i64, file_service: FileService) -> Result<FileResponder, FileServiceError> {
     let file = file_service.get_file_data(id).await?;

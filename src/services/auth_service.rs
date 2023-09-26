@@ -57,6 +57,12 @@ pub struct AuthService {
     signing_key: Ed25519KeyPair,
 }
 
+impl core::fmt::Debug for AuthService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthService").field("db", &self.db).finish()
+    }
+}
+
 #[async_trait]
 impl<'r> FromRequest<'r> for AuthService {
     type Error = ();
@@ -209,7 +215,6 @@ impl AuthService {
         let mut id = None;
 
         if let Some(ref id_str) = res {
-            println!("Found id: {id_str}");
             id = Some(
                 id_str
                     .parse::<i64>()

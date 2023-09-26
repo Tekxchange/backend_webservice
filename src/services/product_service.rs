@@ -5,60 +5,42 @@ use crate::{
         product::{ProductDetails, ProductLocationReturn, ProductReturn, ProductReturnNoUser},
         user::{AuthUser, MinUserReturnDto},
     },
+    AnyhowResponder,
 };
+use anyhow::anyhow;
 use entity::product::{self, ActiveModel as ProductActiveModel, Entity as ProductEntity};
 use geolocation_utils::DistanceUnit;
 use migration::extension::postgres::PgExpr;
 use rocket::{
-    http::Status,
     outcome::IntoOutcome,
     request::{self, FromRequest},
     response::Responder,
-    Request, Response,
+    Request,
 };
 use rust_decimal::prelude::*;
 use sea_orm::{
     entity::prelude::*, query::Condition, ActiveModelTrait, ActiveValue, DatabaseConnection,
     QueryOrder, QuerySelect,
 };
-use serde_json::json;
 use thiserror::Error;
 
 #[cfg(test)]
 mod test;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Responder)]
 pub enum ProductServiceError {
-    #[error(transparent)]
-    OrmError(sea_orm::DbErr),
-    #[error("Product with id {0} not found")]
-    NotFound(i64),
+    #[error("An unknown error has occurred")]
+    #[response(status = 500)]
+    InternalError(AnyhowResponder),
+    #[error("Product not found")]
+    #[response(status = 404)]
+    NotFound(AnyhowResponder),
     #[error("You are not authorized to perform changes on this product")]
-    NotAllowed,
-    #[error("An unknown error occurred")]
-    Unknown,
+    #[response(status = 403)]
+    NotAllowed(AnyhowResponder),
 }
 
-impl<'r> Responder<'r, 'static> for ProductServiceError {
-    fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
-        match self {
-            Self::OrmError(_) | Self::Unknown => {
-                Response::build().status(Status::InternalServerError).ok()
-            }
-            Self::NotFound(_) => {
-                Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
-                    .status(Status::NotFound)
-                    .ok()
-            }
-            Self::NotAllowed => {
-                Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)
-                    .status(Status::Forbidden)
-                    .ok()
-            }
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct ProductService {
     db_connection: DatabaseConnection,
 }
@@ -102,7 +84,7 @@ impl ProductService {
         let created = to_create
             .insert(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?;
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(created.id)
     }
@@ -112,14 +94,14 @@ impl ProductService {
             .find_also_related(entity::user::Entity)
             .one(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?;
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         if let Some((prod, Some(user))) = found {
             let pics = entity::product_picture::Entity::find()
                 .filter(entity::product_picture::Column::ProductId.eq(prod.id))
                 .all(&self.db_connection)
                 .await
-                .map_err(|e| ProductServiceError::OrmError(e))?;
+                .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
             Ok(ProductReturn {
                 id: prod.id,
@@ -135,7 +117,9 @@ impl ProductService {
                 pictures: pics.into_iter().map(|i| i.id).collect(),
             })
         } else {
-            Err(ProductServiceError::NotFound(id))
+            Err(ProductServiceError::NotFound(AnyhowResponder(anyhow!(
+                format!("Product id {id} not found")
+            ))))
         }
     }
 
@@ -147,15 +131,22 @@ impl ProductService {
     ) -> Result<(), ProductServiceError> {
         let db_product = self.get_product_by_id(id).await?;
         if db_product.created_by.id != user.user.id {
-            return Err(ProductServiceError::NotAllowed);
+            return Err(ProductServiceError::NotAllowed(AnyhowResponder(anyhow!(
+                format!(
+                    "User {0} does not have privelages to update product {1}",
+                    user.user.id, db_product.created_by.id
+                )
+            ))));
         }
 
         let active_product: entity::product::ActiveModel = ProductEntity::find()
             .filter(Condition::all().add(entity::product::Column::Id.eq(id)))
             .one(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?
-            .ok_or(ProductServiceError::NotFound(id))?
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
+            .ok_or(ProductServiceError::NotFound(AnyhowResponder(anyhow!(
+                format!("Product id {id} not found")
+            ))))?
             .into();
 
         let new_prod = entity::product::ActiveModel {
@@ -174,7 +165,7 @@ impl ProductService {
         new_prod
             .update(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?;
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(())
     }
@@ -189,28 +180,36 @@ impl ProductService {
             .find_with_related(entity::product_picture::Entity)
             .all(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?;
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
-        let (product, pics) = found
-            .iter()
-            .next()
-            .ok_or(ProductServiceError::NotFound(id))?;
+        let (product, pics) =
+            found
+                .iter()
+                .next()
+                .ok_or(ProductServiceError::NotFound(AnyhowResponder(anyhow!(
+                    format!("Product id {id} not found")
+                ))))?;
 
         let pic_ids = pics.iter().map(|pic| pic.id).collect::<Vec<_>>();
 
         if product.created_by.clone() != user.user.id {
-            return Err(ProductServiceError::NotAllowed);
+            return Err(ProductServiceError::NotAllowed(AnyhowResponder(anyhow!(
+                format!(
+                    "User {0} does not have privelages to update product {1}",
+                    user.user.id, product.created_by
+                )
+            ))));
         }
 
         file_service
             .delete_files(pic_ids.as_slice(), user)
             .await
-            .map_err(|_| ProductServiceError::Unknown)?;
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(e.into())))?;
 
         entity::product::Entity::delete_by_id(id)
             .exec(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?;
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(())
     }
@@ -225,7 +224,11 @@ impl ProductService {
             filter.radius.to_f64().unwrap(),
             filter.units.clone(),
         )
-        .ok_or_else(|| ProductServiceError::Unknown)?;
+        .ok_or_else(|| {
+            ProductServiceError::InternalError(AnyhowResponder(anyhow!(
+                "Unable to parse geolocation bounds"
+            )))
+        })?;
 
         let mut found = ProductEntity::find().filter(
             Condition::all()
@@ -261,7 +264,7 @@ impl ProductService {
             .order_by(product::Column::Id, sea_orm::Order::Desc)
             .all(&self.db_connection)
             .await
-            .map_err(ProductServiceError::OrmError)?;
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?;
 
         Ok(found
             .into_iter()
@@ -311,7 +314,7 @@ impl ProductService {
         let found = query
             .all(&self.db_connection)
             .await
-            .map_err(|e| ProductServiceError::OrmError(e))?
+            .map_err(|e| ProductServiceError::InternalError(AnyhowResponder(anyhow!(e))))?
             .into_iter();
 
         Ok(found

@@ -82,6 +82,7 @@ pub struct MinUserReturnDto {
 }
 
 /// Request guard that will read the JWT from headers and inject the user into the function
+#[derive(Debug)]
 pub struct AuthUser {
     pub user: UserJwtDto,
 }
@@ -110,6 +111,7 @@ impl<'r> FromRequest<'r> for AuthUser {
 /// Request guard that will read the JWT from headers and inject the user into the function
 /// ## Important
 /// - Only to be used when refreshing jwt
+#[derive(Debug)]
 pub struct RefreshAuthUser {
     pub user: UserJwtDto,
     pub refresh_token: String,
