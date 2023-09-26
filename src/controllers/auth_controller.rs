@@ -29,6 +29,7 @@ pub struct JwtReturn {
     jwt: String,
 }
 
+#[tracing::instrument(level = "error")]
 #[post("/login", format = "json", data = "<login>")]
 async fn login(
     user_service: UserService,
@@ -36,7 +37,6 @@ async fn login(
     login: Json<UserLogin>,
     cookies: &CookieJar<'_>,
 ) -> Result<Json<JwtReturn>, UserServiceError> {
-    tracing::error!(message = "Entered login function");
     let token = user_service.login(login.0, auth_service).await?;
 
     let mut refresh_expires = OffsetDateTime::now_utc();
