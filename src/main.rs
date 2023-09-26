@@ -26,6 +26,7 @@ pub struct AnyhowResponder(anyhow::Error);
 
 impl<'r> Responder<'r, 'static> for AnyhowResponder {
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        tracing::error!(error = self.0.to_string());
         let inner_error = self.0.to_string();
         Response::build_from(json!({ "error": inner_error }).respond_to(request)?).ok()
     }
@@ -40,6 +41,7 @@ impl std::fmt::Display for AnyhowResponder {
 
 #[launch]
 pub async fn rocket() -> _ {
+    env::set_var("RUST_BACKTRACE", "full");
     dotenvy::dotenv().ok();
     setup_loki();
     let conn = db::establish_connection().await.unwrap();
@@ -55,7 +57,7 @@ pub async fn rocket() -> _ {
         .unwrap();
 
     if !found_admin {
-        println!("No admin found -- Seeding new admin");
+        tracing::info!("No admin found -- Seeding new admin");
         let admin_email = env::var("ADMIN_EMAIL").unwrap();
         let admin_password = env::var("ADMIN_PASSWORD").unwrap();
         let user_register = UserRegister {

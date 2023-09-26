@@ -44,6 +44,8 @@ pub enum UserServiceError {
 
 impl<'r> Responder<'r, 'static> for UserServiceError {
     fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
+        
+        tracing::error!(error = format!("{self}"));
         match self {
             Self::DuplicateUserError | Self::ForbiddenWords => {
                 Response::build_from(json!({ "error": format!("{self}") }).respond_to(request)?)

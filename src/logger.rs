@@ -6,9 +6,7 @@ pub fn setup_loki() {
     let loki_host = std::env::var("LOKI_SERVER").unwrap();
 
     let (layer, task) = tracing_loki::builder()
-        .label("service.name", "backend")
-        .unwrap()
-        .label("service.type", "webservice")
+        .label("service", "tekxchange_backend_webservice")
         .unwrap()
         .build_url(Url::parse(&loki_host).unwrap())
         .unwrap();
