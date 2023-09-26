@@ -11,7 +11,7 @@ mod models;
 mod services;
 mod statsd;
 use cors::{Cors, Options};
-use logger::setup_loki;
+use logger::{setup_loki, Loki};
 use migration::{Migrator, MigratorTrait};
 use rocket::{response::Responder, Config, Response};
 use serde_json::json;
@@ -26,22 +26,8 @@ pub struct AnyhowResponder(anyhow::Error);
 
 impl<'r> Responder<'r, 'static> for AnyhowResponder {
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
-        let (method, uri) = request
-            .route()
-            .map(|r| (r.method.as_str(), r.uri.as_str()))
-            .unzip();
-
-        let trace = self.0.backtrace();
-        let source = self.0.root_cause().to_string();
-
-        tracing::error!(
-            error = self.0.to_string(),
-            backtrace = trace.to_string(),
-            source,
-            method,
-            uri
-        );
         let inner_error = self.0.to_string();
+        request.local_cache(|| Some(self.0));
         Response::build_from(json!({ "error": inner_error }).respond_to(request)?).ok()
     }
 }
@@ -99,6 +85,7 @@ pub async fn rocket() -> _ {
         .attach(Statsd::default())
         .attach(Cors)
         .attach(Options)
+        .attach(Loki)
         .register(
             "/",
             catchers![

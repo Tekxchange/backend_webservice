@@ -1,7 +1,6 @@
 use reqwest::Url;
 use rocket::fairing::{Fairing, Kind};
-use rocket::{Data, Request, Response};
-use tracing::Span;
+use rocket::{Request, Response};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{filter, Layer};
@@ -31,19 +30,25 @@ pub struct Loki;
 impl Fairing for Loki {
     fn info(&self) -> rocket::fairing::Info {
         rocket::fairing::Info {
-            kind: Kind::Request | Kind::Response,
+            kind: Kind::Response,
             name: "Loki logger",
         }
     }
 
-    async fn on_request(&self, req: &mut Request<'_>, _: &mut Data<'_>) {
-        let uri = req.uri().to_string();
-        let span = tracing::error_span!("new_request", uri);
-        req.local_cache(|| Some(span));
-    }
-
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
-        
         let status = response.status();
+        let (method, uri) = request
+            .route()
+            .map(|r| (r.method.as_str(), r.uri.as_str()))
+            .unzip();
+        let err: &Option<anyhow::Error> = request.local_cache(|| None);
+        if let Some(err) = err {
+            tracing::error!(
+                message = err.to_string(),
+                status = status.to_string(),
+                method,
+                uri,
+            );
+        }
     }
 }
