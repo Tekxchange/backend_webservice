@@ -53,6 +53,7 @@ impl<'r> FromRequest<'r> for FileService {
     }
 }
 
+#[derive(Debug)]
 pub struct FileService {
     db: DatabaseConnection,
     base_file_path: PathBuf,
