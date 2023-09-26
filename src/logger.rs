@@ -36,18 +36,20 @@ impl Fairing for Loki {
     }
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
-        let status = response.status();
-        let (method, uri) = request
-            .route()
-            .map(|r| (r.method.as_str(), r.uri.as_str()))
-            .unzip();
         let err: &Option<anyhow::Error> = request.local_cache(|| None);
         if let Some(err) = err {
+            let status = response.status();
+            let (method, uri) = request
+                .route()
+                .map(|r| (r.method.as_str(), r.uri.as_str()))
+                .unzip();
+            let stack_trace = err.backtrace().to_string();
             tracing::error!(
                 message = err.to_string(),
                 status = status.to_string(),
                 method,
                 uri,
+                stackTrace = stack_trace
             );
         }
     }
