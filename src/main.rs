@@ -92,7 +92,7 @@ pub async fn rocket() -> _ {
     config.cli_colors = false;
     config.log_level = rocket::log::LogLevel::Off;
 
-    controllers::mount_routes(rocket::custom(config))
+    controllers::mount_routes(rocket::build())
         .manage(conn)
         .manage(redis)
         .manage(key)
